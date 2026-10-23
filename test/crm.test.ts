@@ -37,39 +37,39 @@ describe('CRM', { skip: file ? false : 'aucun export dans data/imports' }, () =>
     await assert.rejects(getLead(db, String(rows[0].place_id)), { status: 404 });
   });
 
-  it('changer de statut journalise l’auteur, le canal et la note', async () => {
-    const lead = await updateLead(db, ids[0], 'Patrice', { status: 'CONTACTE', channel: 'telephone', note: 'Messagerie', nextActionAt: '2026-10-28' });
+  it('changer de statut journalise le canal et la note', async () => {
+    const lead = await updateLead(db, ids[0], { status: 'CONTACTE', channel: 'telephone', note: 'Messagerie', nextActionAt: '2026-10-28' });
     assert.equal(lead.crm_status, 'CONTACTE');
     assert.equal(lead.next_action_at, '2026-10-28');
     const statut = lead.activities.find(a => a.kind === 'statut');
     assert.deepEqual(
-      { author: statut?.author, from: statut?.from_status, to: statut?.to_status, channel: statut?.channel, body: statut?.body },
-      { author: 'Patrice', from: 'A_CONTACTER', to: 'CONTACTE', channel: 'telephone', body: 'Messagerie' },
+      { from: statut?.from_status, to: statut?.to_status, channel: statut?.channel, body: statut?.body },
+      { from: 'A_CONTACTER', to: 'CONTACTE', channel: 'telephone', body: 'Messagerie' },
     );
     assert.ok(lead.activities.some(a => a.kind === 'relance' && a.body === '2026-10-28'));
   });
 
   it('refuse un statut, un canal ou une date inconnus', async () => {
-    await assert.rejects(updateLead(db, ids[1], 'Patrice', { status: 'CLIENT' }), { status: 400 });
-    await assert.rejects(updateLead(db, ids[1], 'Patrice', { status: 'CONTACTE', channel: 'pigeon' }), { status: 400 });
-    await assert.rejects(updateLead(db, ids[1], 'Patrice', { nextActionAt: '2026-02-30' }), { status: 400 });
-    await assert.rejects(updateLead(db, ids[1], 'Patrice', {}), { status: 400 });
+    await assert.rejects(updateLead(db, ids[1], { status: 'CLIENT' }), { status: 400 });
+    await assert.rejects(updateLead(db, ids[1], { status: 'CONTACTE', channel: 'pigeon' }), { status: 400 });
+    await assert.rejects(updateLead(db, ids[1], { nextActionAt: '2026-02-30' }), { status: 400 });
+    await assert.rejects(updateLead(db, ids[1], {}), { status: 400 });
   });
 
   it('l’opposition est définitive : plus de changement de statut ni de relance', async () => {
     const id = ids[2];
-    await updateLead(db, id, 'Mariem', { status: 'CONTACTE', nextActionAt: '2026-10-30' });
-    const opposed = await updateLead(db, id, 'Mariem', { status: 'NE_PAS_CONTACTER', note: 'Ne veut plus être appelée' });
+    await updateLead(db, id, { status: 'CONTACTE', nextActionAt: '2026-10-30' });
+    const opposed = await updateLead(db, id, { status: 'NE_PAS_CONTACTER', note: 'Ne veut plus être appelée' });
     assert.equal(opposed.crm_status, 'NE_PAS_CONTACTER');
     assert.equal(opposed.next_action_at, null);
 
     for (const status of ['A_CONTACTER', 'CONTACTE', 'REP_POSITIVE']) {
-      await assert.rejects(updateLead(db, id, 'Patrice', { status }), { status: 409 });
+      await assert.rejects(updateLead(db, id, { status }), { status: 409 });
     }
-    await assert.rejects(updateLead(db, id, 'Patrice', { nextActionAt: '2026-11-02' }), { status: 409 });
+    await assert.rejects(updateLead(db, id, { nextActionAt: '2026-11-02' }), { status: 409 });
 
     // Une note reste possible (traçabilité), sans rouvrir le lead.
-    const noted = await updateLead(db, id, 'Patrice', { note: 'Confirmé par écrit' });
+    const noted = await updateLead(db, id, { note: 'Confirmé par écrit' });
     assert.equal(noted.crm_status, 'NE_PAS_CONTACTER');
   });
 

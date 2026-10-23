@@ -4,7 +4,7 @@ import type { Client } from '@libsql/client';
 import { CHANNELS, CRM_STATUSES, CrmError, exportCsv, getLead, listLeads, updateLead } from '../crm.ts';
 import { ingestBuffer } from '../ingest.ts';
 import { scoreLeads } from '../score.ts';
-import { checkPassword, cleanName, clearedCookie, createSession, readCookie, sessionCookie, verifySession } from './auth.ts';
+import { checkPassword, clearedCookie, createSession, readCookie, sessionCookie, verifySession } from './auth.ts';
 
 export type HandlerDeps = {
   getDb: () => Promise<Client>;
@@ -71,22 +71,19 @@ export function createHandler(deps: HandlerDeps) {
 
       if (path === '/api/login' && method === 'POST') {
         const body = await readJson(req);
-        const name = cleanName(body.name);
-        if (!name) throw new CrmError('Indique ton prénom');
         if (typeof body.password !== 'string' || !checkPassword(body.password, password)) {
           await new Promise(r => setTimeout(r, FAILED_LOGIN_DELAY_MS));
           throw new CrmError('Mot de passe incorrect', 401);
         }
-        return send(res, 200, { name, ...meta }, { 'Set-Cookie': sessionCookie(createSession(name, password), secure) });
+        return send(res, 200, meta, { 'Set-Cookie': sessionCookie(createSession(password), secure) });
       }
       if (path === '/api/logout' && method === 'POST') {
         return send(res, 200, { ok: true }, { 'Set-Cookie': clearedCookie(secure) });
       }
 
-      const session = verifySession(readCookie(req.headers.cookie), password);
-      if (!session) throw new CrmError('Connexion requise', 401);
+      if (!verifySession(readCookie(req.headers.cookie), password)) throw new CrmError('Connexion requise', 401);
 
-      if (path === '/api/me' && method === 'GET') return send(res, 200, { name: session.name, ...meta });
+      if (path === '/api/me' && method === 'GET') return send(res, 200, meta);
 
       if (path === '/api/leads' && method === 'GET') return send(res, 200, { leads: await listLeads(await deps.getDb()) });
 
@@ -94,7 +91,7 @@ export function createHandler(deps: HandlerDeps) {
       if (leadMatch) {
         const placeId = decodeURIComponent(leadMatch[1]);
         if (method === 'GET') return send(res, 200, await getLead(await deps.getDb(), placeId));
-        if (method === 'POST') return send(res, 200, await updateLead(await deps.getDb(), placeId, session.name, await readJson(req)));
+        if (method === 'POST') return send(res, 200, await updateLead(await deps.getDb(), placeId, await readJson(req)));
       }
 
       if (path === '/api/export.csv' && method === 'GET') {

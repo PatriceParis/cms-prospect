@@ -1,24 +1,24 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { checkPassword, cleanName, createSession, readCookie, verifySession } from '../src/web/auth.ts';
+import { checkPassword, createSession, readCookie, verifySession } from '../src/web/auth.ts';
 
 const SECRET = 'secret-de-test';
 
 describe('session', () => {
-  it('un jeton signé redonne le prénom', () => {
-    assert.deepEqual(verifySession(createSession('Mariem', SECRET), SECRET), { name: 'Mariem' });
+  it('un jeton signé avec le bon mot de passe est valide', () => {
+    assert.equal(verifySession(createSession(SECRET), SECRET), true);
   });
 
   it('refuse un jeton altéré, signé avec un autre mot de passe ou expiré', () => {
-    const token = createSession('Mariem', SECRET);
+    const token = createSession(SECRET);
     const [payload, sig] = token.split('.');
-    const forged = Buffer.from(JSON.stringify({ n: 'Intrus', e: Date.now() + 1e9 })).toString('base64url');
-    assert.equal(verifySession(`${forged}.${sig}`, SECRET), null);
-    assert.equal(verifySession(`${payload}.${sig}x`, SECRET), null);
-    assert.equal(verifySession(token, 'autre-mot-de-passe'), null);
-    assert.equal(verifySession(token, SECRET, Date.now() + 31 * 24 * 3600 * 1000), null);
-    assert.equal(verifySession(null, SECRET), null);
-    assert.equal(verifySession('pas-un-jeton', SECRET), null);
+    const forged = Buffer.from(JSON.stringify({ e: Date.now() + 1e12 })).toString('base64url');
+    assert.equal(verifySession(`${forged}.${sig}`, SECRET), false);
+    assert.equal(verifySession(`${payload}.${sig}x`, SECRET), false);
+    assert.equal(verifySession(token, 'autre-mot-de-passe'), false);
+    assert.equal(verifySession(token, SECRET, Date.now() + 31 * 24 * 3600 * 1000), false);
+    assert.equal(verifySession(null, SECRET), false);
+    assert.equal(verifySession('pas-un-jeton', SECRET), false);
   });
 });
 
@@ -30,11 +30,8 @@ describe('checkPassword', () => {
   });
 });
 
-describe('cleanName / readCookie', () => {
-  it('nettoie le prénom et lit le cookie', () => {
-    assert.equal(cleanName('  Patrice \u0000 '), 'Patrice');
-    assert.equal(cleanName('   '), null);
-    assert.equal(cleanName(42), null);
+describe('readCookie', () => {
+  it('lit le cookie de session', () => {
     assert.equal(readCookie('a=1; crm_session=abc.def; b=2'), 'abc.def');
     assert.equal(readCookie(undefined), null);
   });

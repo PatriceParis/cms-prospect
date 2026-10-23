@@ -13,7 +13,6 @@
     <form id="login-form" class="login-card" autocomplete="on">
       <h1>Prospection TPE</h1>
       <p class="muted">Accès réservé.</p>
-      <label>Prénom <input name="name" autocomplete="given-name" required maxlength="40"></label>
       <label>Mot de passe <input name="password" type="password" autocomplete="current-password" required></label>
       <button type="submit" class="primary">Se connecter</button>
       <p id="login-error" class="error" role="alert"></p>
@@ -27,7 +26,6 @@
       <div class="top-actions">
         <button type="button" id="import-open">Importer</button>
         <a class="button" href="/api/export.csv">Exporter CSV</a>
-        <span class="me" id="me"></span>
         <button type="button" id="logout" class="ghost">Déconnexion</button>
       </div>
     </header>

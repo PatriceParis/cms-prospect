@@ -23,10 +23,10 @@ npm test
 
 ## CRM
 
-Accès par un mot de passe partagé (`CRM_PASSWORD`) et un prénom, qui signe l'historique.
+Accès par un mot de passe partagé (`CRM_PASSWORD`).
 
 - Statuts : À CONTACTER, CONTACTÉ, PAS DE RÉP, RÉP POSITIVE, RÉP NÉGATIVE, NE PAS CONTACTER. Ce dernier est une opposition définitive : le lead ne peut plus changer de statut ni recevoir de relance.
-- Fiche lead : téléphone cliquable, lien vers la fiche Google, canal de contact, note, date de relance (pré-remplie à J+3 ouvrés quand on passe en CONTACTÉ ou PAS DE RÉP) et historique.
+- Fiche lead : téléphone cliquable, lien vers la fiche Google, canal de contact, note, date de relance (pré-remplie à J+3 ouvrés quand on passe en CONTACTÉ ou PAS DE RÉP) et historique daté.
 - Filtres : priorité, secteur, type de numéro, fiche non revendiquée, « à relancer aujourd'hui ». Indicateurs : contactés, taux de réponse, réponses positives.
 - Import d'un export Apify depuis le navigateur (ingest puis score), export CSV pour Excel.
 

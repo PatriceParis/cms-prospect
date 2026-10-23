@@ -78,7 +78,7 @@ export type LeadChange = {
   nextActionAt?: unknown; // AAAA-MM-JJ, ou null pour retirer la relance
 };
 
-export async function updateLead(db: Client, placeId: string, author: string, change: LeadChange) {
+export async function updateLead(db: Client, placeId: string, change: LeadChange) {
   const { rows } = await db.execute({
     sql: `SELECT crm_status, crm_channel, next_action_at FROM leads WHERE place_id = ? AND status <> 'hors_cible'`,
     args: [placeId],
@@ -117,6 +117,8 @@ export async function updateLead(db: Client, placeId: string, author: string, ch
   if (nextActionAt !== undefined) sets.push('next_action_at = :next');
   writes.push({ sql: `UPDATE leads SET ${sets.join(', ')} WHERE place_id = :id`, args: { now, status: status ?? null, channel, next: nextActionAt ?? null, id: placeId } });
 
+  // L'accès par mot de passe seul n'identifie pas la personne : la colonne author reste vide.
+  const author = '';
   const activity = 'INSERT INTO activities (place_id, at, author, kind, from_status, to_status, channel, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
   if (logStatus) writes.push({ sql: activity, args: [placeId, now, author, 'statut', current.status, status, channel, note || null] });
   else if (note) writes.push({ sql: activity, args: [placeId, now, author, 'note', null, null, null, note] });

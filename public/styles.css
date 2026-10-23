@@ -129,7 +129,6 @@ textarea { resize: vertical; width: 100%; }
 .kpi b { font-size: 17px; font-variant-numeric: tabular-nums; }
 .kpi span { color: var(--muted); font-size: 12px; }
 .top-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.me { color: var(--muted); }
 
 /* Onglets de statut */
 .status-tabs {
@@ -264,7 +263,7 @@ dialog::backdrop { background: rgb(0 0 0 / 0.35); }
 @media (max-width: 760px) {
   .topbar, .status-tabs, .toolbar { padding-left: 16px; padding-right: 16px; }
   .table-wrap { padding: 0 16px 32px; }
-  .col-city, .col-reviews, .col-last, .me { display: none; }
+  .col-city, .col-reviews, .col-last { display: none; }
   .leads th, .leads td { padding: 8px; }
   .count { margin-left: 0; }
   .kpis { order: 3; flex-basis: 100%; }

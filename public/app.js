@@ -9,7 +9,6 @@ const FILTERS_KEY = 'crm-filters-v1';
 const DEFAULT_FILTERS = { q: '', priority: '', sector: '', phone: '', status: '', unclaimed: false, due: false };
 
 const state = {
-  me: null,
   statuses: {},
   channels: {},
   leads: [],
@@ -81,16 +80,14 @@ function showLogin(message = '') {
   $('#app').hidden = true;
   $('#login').hidden = false;
   $('#login-error').textContent = message;
-  $('#login-form [name=name]').focus();
+  $('#login-form [name=password]').focus();
 }
 
-function onLogged(me) {
-  state.me = me.name;
-  state.statuses = me.statuses;
-  state.channels = me.channels;
+function onLogged(meta) {
+  state.statuses = meta.statuses;
+  state.channels = meta.channels;
   $('#login').hidden = true;
   $('#app').hidden = false;
-  $('#me').textContent = me.name;
   loadLeads();
 }
 
@@ -99,7 +96,7 @@ $('#login-form').addEventListener('submit', async e => {
   const form = new FormData(e.target);
   $('#login-error').textContent = '';
   try {
-    onLogged(await api('/api/login', { method: 'POST', json: { name: form.get('name'), password: form.get('password') } }));
+    onLogged(await api('/api/login', { method: 'POST', json: { password: form.get('password') } }));
     e.target.reset();
   } catch (err) {
     $('#login-error').textContent = err.message;
@@ -326,7 +323,7 @@ function renderPanel() {
 }
 
 function activityHtml(a) {
-  const who = `<span class="when">${esc(frDateTime(a.at))} · ${esc(a.author)}</span>`;
+  const who = `<span class="when">${esc(frDateTime(a.at))}${a.author ? ` · ${esc(a.author)}` : ''}</span>`;
   let what = '';
   if (a.kind === 'statut') {
     const channel = a.channel ? ` · ${esc(state.channels[a.channel] ?? a.channel)}` : '';

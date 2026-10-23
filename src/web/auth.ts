@@ -1,11 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-// Accès partagé par un seul mot de passe (CRM_PASSWORD), avec le prénom de la
-// personne connectée dans la session pour signer l'historique. La clé de
-// signature dérive du mot de passe : le changer déconnecte tout le monde.
+// Accès partagé par un seul mot de passe (CRM_PASSWORD). La clé de signature des
+// sessions dérive du mot de passe : le changer déconnecte tout le monde.
 export const COOKIE_NAME = 'crm_session';
 const MAX_AGE_S = 30 * 24 * 3600;
-const NAME_MAX = 40;
 
 const signingKey = (password: string) => createHmac('sha256', password).update('cms-prospect/session/v1').digest();
 const sign = (payload: string, password: string) => createHmac('sha256', signingKey(password)).update(payload).digest('base64url');
@@ -16,31 +14,23 @@ export function checkPassword(given: string, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-export function cleanName(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const name = raw.replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
-  return name || null;
-}
-
-export function createSession(name: string, password: string, now = Date.now()): string {
-  const payload = Buffer.from(JSON.stringify({ n: name, e: now + MAX_AGE_S * 1000 })).toString('base64url');
+export function createSession(password: string, now = Date.now()): string {
+  const payload = Buffer.from(JSON.stringify({ e: now + MAX_AGE_S * 1000 })).toString('base64url');
   return `${payload}.${sign(payload, password)}`;
 }
 
-export function verifySession(token: string | null, password: string, now = Date.now()): { name: string } | null {
-  if (!token) return null;
+export function verifySession(token: string | null, password: string, now = Date.now()): boolean {
+  if (!token) return false;
   const [payload, sig, ...rest] = token.split('.');
-  if (!payload || !sig || rest.length) return null;
+  if (!payload || !sig || rest.length) return false;
   const expected = Buffer.from(sign(payload, password));
   const given = Buffer.from(sig);
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return false;
   try {
-    const { n, e } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { n?: unknown; e?: unknown };
-    const name = cleanName(n);
-    if (!name || typeof e !== 'number' || e < now) return null;
-    return { name };
+    const { e } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { e?: unknown };
+    return typeof e === 'number' && e >= now;
   } catch {
-    return null;
+    return false;
   }
 }
 
