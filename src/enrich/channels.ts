@@ -112,16 +112,28 @@ export function judgeInstagram(lead: LeadContact, cand: IgCandidate, profile: Ig
   if (compareAddress(lead.address, `${profile?.business_address_json ?? ''} ${bio} ${cand.snippet}`) === 'exacte') {
     return { confidence: 'haute', proof: 'adresse' };
   }
+  // Sans téléphone ni adresse, un mot commun ne suffit pas (« Styles Et Couleurs » ≠ « Sorain
+  // Styles », « Le Salon de Sophie » ≠ « Le Boudoir de Sophie ») : le nom du compte doit
+  // contenir le nom complet du salon, et le compte citer la ville.
   const identity = `${cand.handle ?? profile?.username ?? ''} ${profile?.full_name ?? ''} ${cand.title}`;
   const context = fold(`${identity} ${bio} ${cand.snippet}`);
   const city = fold(lead.city ?? 'bordeaux');
-  if (nameRelated(lead.name, identity) && context.includes(city)) return { confidence: 'moyenne', proof: 'nom et ville' };
+  if (containsFullName(lead.name, identity) && context.includes(city)) return { confidence: 'moyenne', proof: 'nom complet et ville' };
   return { confidence: null, proof: null };
 }
 
+export function containsFullName(leadName: string, text: string): boolean {
+  const full = compact(coreName(leadName));
+  const glued = [text, ...text.split(/[\s@()·|]+/)].map(compact);
+  return full.length >= 6 ? glued.some(t => t.includes(full)) : glued.some(t => t === full);
+}
+
+const isEmail = (s: string | null | undefined): s is string => typeof s === 'string' && new RegExp(`^${EMAIL_RE.source}$`).test(s.trim());
+
 export function instagramEmail(profile: IgProfile | null, snippet: string): { email: string; source: string } | null {
-  const fromProfile = profile?.business_email || profile?.email || profile?.emails?.[0];
-  if (fromProfile) return { email: fromProfile.toLowerCase(), source: profile?.emailSource === 'contact_button' ? 'instagram_contact' : 'instagram_bio' };
+  // Les adresses mal formées (accents, espaces) sont écartées : elles rebondiraient.
+  const fromProfile = [profile?.business_email, profile?.email, ...(profile?.emails ?? [])].find(isEmail);
+  if (fromProfile) return { email: fromProfile.trim().toLowerCase(), source: profile?.emailSource === 'contact_button' ? 'instagram_contact' : 'instagram_bio' };
   const inBio = emailIn(profile?.biography);
   if (inBio) return { email: inBio, source: 'instagram_bio' };
   const inSnippet = emailIn(snippet); // bio gardée en cache par Google

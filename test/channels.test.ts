@@ -46,14 +46,22 @@ describe('Instagram', () => {
     const cand = { handle: 'zephyr_bdx', url: '', title: 'Zéphyr', snippet: '' };
     assert.equal(judgeInstagram(lead, cand, { business_phone_number: '+33 5 56 00 00 00' }).confidence, 'haute');
     assert.equal(judgeInstagram(lead, cand, { biography: '📍 12 rue des Lilas, Bordeaux' }).confidence, 'haute');
-    assert.equal(judgeInstagram(lead, cand, { full_name: 'Zéphyr · Bordeaux' }).confidence, 'moyenne');
-    assert.equal(judgeInstagram(lead, cand, { full_name: 'Zéphyr · Lyon' }).confidence, null);
+    assert.equal(judgeInstagram(lead, cand, { full_name: 'Atelier Zéphyr · Bordeaux' }).confidence, 'moyenne');
+    assert.equal(judgeInstagram(lead, cand, { full_name: 'Atelier Zéphyr · Lyon' }).confidence, null);
+  });
+
+  it('sans preuve, un mot commun ne suffit pas : il faut le nom complet du salon', () => {
+    const sophie: LeadContact = { ...lead, name: 'Le Salon de Lune', phone: null, address: null };
+    const c = (handle: string, title: string) => ({ handle, url: '', title, snippet: 'Bordeaux' });
+    assert.equal(judgeInstagram(sophie, c('leboudoirdelune', 'Le Boudoir de Lune'), null).confidence, null);
+    assert.equal(judgeInstagram(sophie, c('lesalondelune_bdx', 'Le Salon de Lune'), null).confidence, 'moyenne');
   });
 
   it('e-mail : bouton Contact, puis bio, puis extrait Google', () => {
     assert.deepEqual(instagramEmail({ business_email: 'a@b.fr', emailSource: 'contact_button' }, ''), { email: 'a@b.fr', source: 'instagram_contact' });
     assert.deepEqual(instagramEmail({ biography: 'écrire à c@d.fr' }, ''), { email: 'c@d.fr', source: 'instagram_bio' });
     assert.deepEqual(instagramEmail(null, 'bio : e@f.fr'), { email: 'e@f.fr', source: 'google_extrait' });
+    assert.equal(instagramEmail({ business_email: 'géraldine@exemple.fr' }, ''), null);
   });
 });
 
