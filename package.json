@@ -10,7 +10,8 @@
     "ingest": "node --disable-warning=ExperimentalWarning src/cli.ts ingest",
     "score": "node --disable-warning=ExperimentalWarning src/cli.ts score",
     "enrich": "node --disable-warning=ExperimentalWarning src/cli.ts enrich",
-    "crm":"node --disable-warning=ExperimentalWarning src/web/dev.ts",
+    "sync": "node --disable-warning=ExperimentalWarning src/cli.ts sync",
+    "crm": "node --disable-warning=ExperimentalWarning src/web/dev.ts",
     "build": "node scripts/build-vercel.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test",
     "typecheck": "tsc --noEmit"

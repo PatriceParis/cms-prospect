@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs';
 import type { Client } from '@libsql/client';
 import { openDb } from './db.ts';
+import { createClient } from '@libsql/client';
 import { runCascade } from './enrich/cascade.ts';
+import { copyEnrichments } from './enrich/sync.ts';
+import { migrate } from './schema.ts';
 import { runStage1, selectEnriched, selectSample, type LeadResult } from './enrich/stage1.ts';
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
@@ -11,7 +14,22 @@ const USAGE = `Usage :
   npm run score
   npm run enrich -- --sample 20 [--nouveaux]
   npm run enrich -- --rejouer
-  npm run enrich -- --cascade [--limit N] [--sans-fullenrich]`;
+  npm run enrich -- --cascade [--limit N] [--sans-fullenrich]
+  npm run sync -- <base source, ex. file:data/prospection.db>`;
+
+// Copie les enrichissements d'une base source vers la base courante (Turso si configurée).
+async function sync(db: Client, args: string[]) {
+  const [sourceUrl] = args;
+  if (!sourceUrl) throw new Error(USAGE);
+  const target = process.env.TURSO_DATABASE_URL ?? 'base locale';
+  if (!process.env.TURSO_DATABASE_URL) throw new Error('TURSO_DATABASE_URL absente : la copie vise la base de production.');
+  const source = createClient({ url: sourceUrl });
+  await migrate(source);
+  console.log(`Copie des enrichissements : ${sourceUrl} → ${target.split('://')[0]}://…${target.slice(-20)}`);
+  const r = await copyEnrichments(source, db);
+  console.log(`  ${r.runs} runs, ${r.enrichments} résultats copiés, ${r.skippedLeads} leads absents de la cible ignorés, ${r.consolidated} leads consolidés.`);
+  source.close();
+}
 
 const STAGE_NAMES: Record<number, string> = { 2: 'Instagram', 3: 'LinkedIn', 4: 'FullEnrich' };
 
@@ -126,6 +144,7 @@ const db = await openDb();
 try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
+  else if (command === 'sync') await sync(db, args);
   else if (command === 'enrich' && args.includes('--cascade')) await cascade(db, args);
   else if (command === 'enrich') await enrich(db, args);
   else throw new Error(USAGE);
