@@ -1,0 +1,24 @@
+{
+  "name": "cms-prospect",
+  "private": true,
+  "description": "Machine de prospection des TPE pour l'offre sites vitrines",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "ingest": "node --disable-warning=ExperimentalWarning src/cli.ts ingest",
+    "score": "node --disable-warning=ExperimentalWarning src/cli.ts score",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "exceljs": "4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

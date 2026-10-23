@@ -1,0 +1,4 @@
+node_modules/
+# Données de prospection : contiennent des données personnelles, jamais dans git.
+data/
+.env
