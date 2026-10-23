@@ -9,6 +9,7 @@ Node ≥ 22.18 exécute le TypeScript directement, sans étape de build. La base
 ```bash
 npm install
 npm run ingest -- data/imports/leads-bordeaux-coiffeurs-instituts-ramoneurs.xlsx
+npm run score
 npm test
 ```
 
@@ -17,6 +18,7 @@ npm test
 | Module | Commande | Rôle |
 | --- | --- | --- |
 | `ingest` | `npm run ingest -- <fichier>` | Lit un export Apify `compass/crawler-google-places` (XLSX ou JSON), normalise les téléphones en E.164, dédoublonne sur le Place ID. Relancer le même fichier ne crée rien. Les catégories hors cible sont stockées en `hors_cible` et ne sortent jamais du pipeline. |
+| `score` | `npm run score` | Score sur 8 points, priorité A ≥ 7, B ≥ 5, C en dessous. La règle est codée en dur dans `src/score.ts`. |
 
 ## Données
 
