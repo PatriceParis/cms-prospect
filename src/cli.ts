@@ -1,12 +1,15 @@
 import { existsSync } from 'node:fs';
 import type { Client } from '@libsql/client';
 import { openDb } from './db.ts';
+import { runStage1, selectEnriched, selectSample, type LeadResult } from './enrich/stage1.ts';
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
 
 const USAGE = `Usage :
   npm run ingest -- <export Apify .xlsx|.json> [...]
-  npm run score`;
+  npm run score
+  npm run enrich -- --sample 20 [--nouveaux]
+  npm run enrich -- --rejouer`;
 
 async function ingest(db: Client, files: string[]) {
   if (!files.length) throw new Error(USAGE);
@@ -47,12 +50,53 @@ async function score(db: Client) {
   }
 }
 
+const pct = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)} %` : '—');
+
+function describe(r: LeadResult): string {
+  const where = `${r.lead.name} (${r.lead.postal_code ?? 'sans CP'})`;
+  if (r.error) return `[erreur]      ${where} — ${r.error}`;
+  const d = r.decision!;
+  if (d.outcome !== 'trouve') {
+    return d.outcome === 'introuvable'
+      ? `[introuvable] ${where}`
+      : `[ambigu]      ${where} — ${d.candidates.map(c => `${c.legalName} (${c.siren})`).join(' / ')}`;
+  }
+  const b = d.best;
+  const person = b.person ? `${b.person.firstName} ${b.person.lastName}${b.person.role ? `, ${b.person.role}` : ''}` : `pas de personne : ${b.personMissingReason}`;
+  return `[${b.confidence}]${' '.repeat(12 - b.confidence!.length)}${where} → ${b.legalName} · ${b.legalForm} · ${person} · par ${b.foundBy}, adresse ${b.addressRelation ?? 'différente'}, nom ${b.nameRelation}`;
+}
+
+// Étage 1 uniquement sur échantillon : l'industrialisation attend la mesure.
+async function enrich(db: Client, args: string[]) {
+  let sample;
+  let mode;
+  if (args.includes('--rejouer')) {
+    sample = await selectEnriched(db);
+    mode = 'rejeu';
+  } else {
+    const i = args.indexOf('--sample');
+    const size = i >= 0 ? Number(args[i + 1]) : NaN;
+    if (!Number.isInteger(size) || size <= 0) throw new Error(USAGE);
+    const onlyNew = args.includes('--nouveaux');
+    sample = await selectSample(db, size, { onlyNew });
+    mode = `${onlyNew ? 'controle' : 'echantillon'}-${size}`;
+  }
+  console.log(`Étage 1 (Recherche d'entreprises), ${mode}, ${sample.length} leads :\n`);
+  const r = await runStage1(db, sample, mode, res => console.log(describe(res)));
+  const c = r.counts;
+  console.log(`\nRun #${r.runId} — ${c.leads} leads`);
+  console.log(`  Entreprise identifiée : ${c.found} (${pct(c.found, c.leads)}), dont ${c.foundHigh} en confiance haute`);
+  console.log(`  Personne nommée       : ${c.foundWithPerson} (${pct(c.foundWithPerson, c.leads)})`);
+  console.log(`  File manuelle         : ${c.ambiguous} ambigus, ${c.notFound} introuvables, ${c.errors} erreurs`);
+}
+
 if (existsSync('.env')) process.loadEnvFile('.env');
 const [command, ...args] = process.argv.slice(2);
 const db = await openDb();
 try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
+  else if (command === 'enrich') await enrich(db, args);
   else throw new Error(USAGE);
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);

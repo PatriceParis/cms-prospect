@@ -39,6 +39,43 @@ const STATEMENTS = [
     body        TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS activities_by_lead ON activities (place_id, at)`,
+  `CREATE TABLE IF NOT EXISTS enrichments (
+    place_id               TEXT NOT NULL REFERENCES leads(place_id),
+    stage                  INTEGER NOT NULL,   -- 1 personne (registre), 2 e-mail (FullEnrich), 3 Instagram
+    source                 TEXT NOT NULL,
+    outcome                TEXT NOT NULL,      -- trouve | ambigu | introuvable | erreur
+    confidence             TEXT,               -- haute | moyenne
+    method                 TEXT,               -- adresse | nom
+    siren                  TEXT,
+    siret                  TEXT,
+    legal_name             TEXT,
+    legal_form             TEXT,
+    naf                    TEXT,
+    person_first_name      TEXT,
+    person_last_name       TEXT,
+    person_other_last_name TEXT,
+    person_role            TEXT,
+    person_missing_reason  TEXT,
+    candidates             TEXT,               -- JSON des candidats, pour la file manuelle
+    run_id                 INTEGER NOT NULL,
+    enriched_at            TEXT NOT NULL,
+    PRIMARY KEY (place_id, stage)
+  )`,
+  `CREATE TABLE IF NOT EXISTS enrich_runs (
+    id                INTEGER PRIMARY KEY,
+    stage             INTEGER NOT NULL,
+    source            TEXT NOT NULL,
+    mode              TEXT NOT NULL,
+    leads             INTEGER NOT NULL,
+    found             INTEGER,
+    found_high        INTEGER,
+    found_with_person INTEGER,
+    ambiguous         INTEGER,
+    not_found         INTEGER,
+    errors            INTEGER,
+    started_at        TEXT NOT NULL,
+    finished_at       TEXT
+  )`,
   `CREATE TABLE IF NOT EXISTS ingest_runs (
     id            INTEGER PRIMARY KEY,
     file          TEXT NOT NULL,
