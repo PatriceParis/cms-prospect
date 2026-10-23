@@ -48,15 +48,26 @@ function isIsoDate(v: string): boolean {
 const LIST_COLUMNS = `
   l.place_id, l.name, l.search_sector, l.google_category, l.rating, l.reviews_count, l.phone, l.phone_kind,
   l.address, l.postal_code, l.city, l.photos_count, l.claimed, l.maps_url, l.score, l.priority,
-  l.crm_status, l.crm_channel, l.next_action_at, l.crm_updated_at`;
+  l.crm_status, l.crm_channel, l.next_action_at, l.crm_updated_at,
+  l.contact_first_name, l.contact_last_name, l.contact_role, l.email, l.email_source, l.instagram, l.linkedin_url`;
+
+// Tentative de contact sortante : un statut CONTACTÉ ou PAS DE RÉP enregistré avec un canal.
+const OUTBOUND = `a.kind = 'statut' AND a.to_status IN ('CONTACTE', 'PAS_DE_REP') AND a.channel IS NOT NULL`;
 
 export async function listLeads(db: Client) {
   const { rows } = await db.execute(`
-    SELECT ${LIST_COLUMNS}, (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id) AS last_activity_at
+    SELECT ${LIST_COLUMNS},
+      (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id) AS last_activity_at,
+      (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS last_attempt_at,
+      (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS first_attempt_at
     FROM leads l WHERE l.status <> 'hors_cible'
     ORDER BY l.score DESC, l.reviews_count DESC`);
   return rows.map(plain);
 }
+
+// Jour calendaire à Paris, pour le garde-fou « un contact par jour » (le serveur tourne en UTC).
+const PARIS_DAY = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris' });
+export const parisDay = (d: Date) => PARIS_DAY.format(d);
 
 export async function getLead(db: Client, placeId: string): Promise<LeadFields & { activities: LeadFields[] }> {
   const lead = await db.execute({
@@ -109,6 +120,19 @@ export async function updateLead(db: Client, placeId: string, change: LeadChange
   const nextChanged = nextActionAt !== undefined && nextActionAt !== current.nextActionAt;
   if (!logStatus && !note && !nextChanged) throw new CrmError('Rien à enregistrer');
 
+  // Garde-fou du cahier des charges : un seul contact sortant par lead et par jour, tous
+  // canaux confondus. Une réponse reçue, une note ou une correction sans canal passent.
+  if (logStatus && channel && (status === 'CONTACTE' || status === 'PAS_DE_REP')) {
+    const last = await db.execute({
+      sql: `SELECT max(at) AS at FROM activities a WHERE a.place_id = ? AND ${OUTBOUND}`,
+      args: [placeId],
+    });
+    const lastAt = last.rows[0]?.at as string | null;
+    if (lastAt && parisDay(new Date(lastAt)) === parisDay(new Date())) {
+      throw new CrmError('Déjà contacté aujourd’hui : un seul contact par lead et par jour, tous canaux confondus.', 409);
+    }
+  }
+
   const now = new Date().toISOString();
   const writes: InStatement[] = [];
   const sets = ['crm_updated_at = :now'];
@@ -135,6 +159,10 @@ const CSV_COLUMNS: [label: string, key: string][] = [
   ['Priorité', 'priority'],
   ['Score /8', 'score'],
   ['Statut CRM', 'crm_status_label'],
+  ['Gérant(e)', 'contact_label'],
+  ['E-mail', 'email'],
+  ['Instagram', 'instagram_url'],
+  ['LinkedIn', 'linkedin_url'],
   ['Dernier canal', 'crm_channel'],
   ['Relance le', 'next_action_at'],
   ['Téléphone', 'phone'],
@@ -162,6 +190,8 @@ export async function exportCsv(db: Client): Promise<string> {
       ...l,
       crm_status_label: CRM_STATUSES[l.crm_status as CrmStatus] ?? l.crm_status,
       claimed_label: l.claimed ? 'Oui' : 'Non',
+      contact_label: [l.contact_first_name, l.contact_last_name].filter(Boolean).join(' '),
+      instagram_url: l.instagram ? `https://www.instagram.com/${l.instagram}/` : '',
     };
     lines.push(CSV_COLUMNS.map(([, key]) => csvCell(row[key])).join(';'));
   }

@@ -73,6 +73,17 @@ describe('CRM', { skip: file ? false : 'aucun export dans data/imports' }, () =>
     assert.equal(noted.crm_status, 'NE_PAS_CONTACTER');
   });
 
+  it('un seul contact sortant par lead et par jour ; une réponse reste possible', async () => {
+    const id = ids[3];
+    await updateLead(db, id, { status: 'PAS_DE_REP', channel: 'telephone' });
+    await assert.rejects(updateLead(db, id, { status: 'CONTACTE', channel: 'whatsapp' }), { status: 409 });
+    await assert.rejects(updateLead(db, id, { status: 'PAS_DE_REP', channel: 'telephone', note: 'Rappel' }), { status: 409 });
+    const replied = await updateLead(db, id, { status: 'REP_POSITIVE', channel: 'telephone', note: 'Rappelle, intéressée' });
+    assert.equal(replied.crm_status, 'REP_POSITIVE');
+    const leads = await listLeads(db);
+    assert.ok(leads.find(l => l.place_id === id)?.last_attempt_at);
+  });
+
   it('une ré-ingestion du même fichier ne touche pas aux statuts CRM', async () => {
     await ingestFile(db, join(IMPORTS, file!));
     assert.equal((await getLead(db, ids[0])).crm_status, 'CONTACTE');

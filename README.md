@@ -20,16 +20,20 @@ npm test
 | `ingest` | `npm run ingest -- <fichier>` | Lit un export Apify `compass/crawler-google-places` (XLSX ou JSON), normalise les téléphones en E.164, dédoublonne sur le Place ID. Relancer le même fichier ne crée rien. Les catégories hors cible sont stockées en `hors_cible` et ne sortent jamais du pipeline. |
 | `score` | `npm run score` | Score sur 8 points, priorité A ≥ 7, B ≥ 5, C en dessous. La règle est codée en dur dans `src/score.ts`. |
 | `enrich` | `npm run enrich -- --sample 20 [--nouveaux]` · `--rejouer` | Étage 1 : retrouve l'entreprise et la personne derrière la fiche via l'API Recherche d'entreprises (gratuite, sans clé). Par l'adresse d'abord, puis par le nom. Confiance haute ou moyenne ; les cas ambigus et introuvables restent en file manuelle avec leurs candidats. Chaque run est journalisé dans `enrich_runs`. |
+| cascade | `npm run enrich -- --cascade [--limit N] [--sans-fullenrich]` | Collecte des contacts, dans l'ordre : 1 registre (gérant·e), 2 Instagram (compte, e-mail public, via Google puis le scraper de profils), 3 LinkedIn (Google, nom + salon ou ville + métier), 4 FullEnrich en dernier recours pour les dirigeants nommés encore sans e-mail. Chaque étape saute les leads déjà traités. Les meilleurs contacts sont consolidés sur le lead. |
 | CRM | `npm run crm` | Interface de suivi des leads (http://localhost:3000 en local). |
+
+La cascade utilise `APIFY_TOKEN` (Apify, environ 0,005 $ par lead) et `FULLENRICH_API_KEY` (1 crédit par e-mail pro, 3 par e-mail perso, jamais de téléphone). Mesure du 23/10 sur 20 leads : téléphone 15, gérant·e nommé·e 13, Instagram 9, e-mail 4, LinkedIn 2.
 
 ## CRM
 
 Accès par un mot de passe partagé (`CRM_PASSWORD`).
 
-- Statuts : À CONTACTER, CONTACTÉ, PAS DE RÉP, RÉP POSITIVE, RÉP NÉGATIVE, NE PAS CONTACTER. Ce dernier est une opposition définitive : le lead ne peut plus changer de statut ni recevoir de relance.
-- Fiche lead : téléphone cliquable, lien vers la fiche Google, canal de contact, note, date de relance (pré-remplie à J+3 ouvrés quand on passe en CONTACTÉ ou PAS DE RÉP) et historique daté.
-- Filtres : priorité, secteur, type de numéro, fiche non revendiquée, « à relancer aujourd'hui ». Indicateurs : contactés, taux de réponse, réponses positives.
-- Import d'un export Apify depuis le navigateur (ingest puis score), export CSV pour Excel.
+- **Aujourd'hui** : la file de travail du SDR. Relances dues, puis les meilleurs leads jamais contactés (15 nouveaux par jour), avec Appeler, WhatsApp (mobiles), DM Instagram et e-mail en un clic. Bandeau hors du créneau lundi-vendredi 9 h-18 h (Paris).
+- **Fiche** : canaux de contact, résultat en un clic (pas de réponse → relance J+2, contacté → J+3, intéressé → rappel J+1, pas intéressé, ne plus contacter), lead suivant automatique dans la file, navigation ↑ ↓, historique.
+- **Garde-fous côté serveur** : un seul contact sortant par lead et par jour, tous canaux confondus ; NE PAS CONTACTER est une opposition définitive (plus de statut ni de relance).
+- **Tous les leads** : indicateurs, onglets de statut, filtres (priorité, secteur, téléphone, canal disponible, fiche non revendiquée, à relancer), tri par colonne.
+- Import d'un export Apify depuis le navigateur (ingest puis score), export CSV pour Excel avec gérant·e, e-mail, Instagram et LinkedIn.
 
 ## Déploiement Vercel
 

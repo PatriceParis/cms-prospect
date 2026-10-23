@@ -5,87 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Prospection TPE</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5bd3'/%3E%3Cpath d='M9 22V10h8a4 4 0 0 1 0 8h-8' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23315fd8'/%3E%3Cpath d='M10 23V9h7a5 5 0 0 1 0 10h-7' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <section id="login" class="login" hidden>
-    <form id="login-form" class="login-card" autocomplete="on">
+    <form id="login-form" class="login-card">
+      <div class="brand-mark" aria-hidden="true">P</div>
       <h1>Prospection TPE</h1>
-      <p class="muted">Accès réservé.</p>
-      <label>Mot de passe <input name="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit" class="primary">Se connecter</button>
+      <p class="muted">Espace réservé à l'équipe.</p>
+      <label class="field">Mot de passe
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="btn primary block">Se connecter</button>
       <p id="login-error" class="error" role="alert"></p>
     </form>
   </section>
 
   <div id="app" hidden>
     <header class="topbar">
-      <div class="brand">Prospection TPE</div>
-      <div class="kpis" id="kpis"></div>
-      <div class="top-actions">
-        <button type="button" id="import-open">Importer</button>
-        <a class="button" href="/api/export.csv">Exporter CSV</a>
-        <button type="button" id="logout" class="ghost">Déconnexion</button>
+      <div class="brand"><span class="brand-mark sm" aria-hidden="true">P</span>Prospection TPE</div>
+      <nav class="views" aria-label="Vues">
+        <button type="button" class="view-tab" data-view="today">Aujourd'hui <span class="pill" id="today-count"></span></button>
+        <button type="button" class="view-tab" data-view="all">Tous les leads <span class="pill" id="all-count"></span></button>
+      </nav>
+      <div class="menu-wrap">
+        <button type="button" class="btn ghost icon" id="menu-open" aria-haspopup="true" aria-expanded="false" aria-label="Plus d'actions">⋯</button>
+        <div class="menu" id="menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-menu="import">Importer un export Apify</button>
+          <a role="menuitem" href="/api/export.csv">Exporter en CSV</a>
+          <hr>
+          <button type="button" role="menuitem" data-menu="logout">Se déconnecter</button>
+        </div>
       </div>
     </header>
 
-    <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
+    <main id="view-today" class="view" hidden></main>
 
-    <section class="toolbar">
-      <input id="f-q" type="search" placeholder="Rechercher un nom, une ville, un téléphone…" aria-label="Recherche">
-      <select id="f-priority" aria-label="Priorité">
-        <option value="">Toutes priorités</option>
-        <option value="A">Priorité A</option>
-        <option value="B">Priorité B</option>
-        <option value="C">Priorité C</option>
-      </select>
-      <select id="f-sector" aria-label="Secteur"><option value="">Tous secteurs</option></select>
-      <select id="f-phone" aria-label="Téléphone">
-        <option value="">Tous téléphones</option>
-        <option value="fixe">Fixe</option>
-        <option value="mobile">Mobile</option>
-        <option value="voip">Box (09)</option>
-        <option value="aucun">Sans numéro</option>
-      </select>
-      <label class="check"><input id="f-unclaimed" type="checkbox"> Fiche non revendiquée</label>
-      <label class="check"><input id="f-due" type="checkbox"> À relancer aujourd'hui</label>
-      <span class="count" id="count"></span>
-    </section>
-
-    <main class="table-wrap">
-      <table class="leads">
-        <thead>
-          <tr>
-            <th>Prio</th>
-            <th>Établissement</th>
-            <th class="col-city">Ville</th>
-            <th class="col-reviews">Avis</th>
-            <th>Téléphone</th>
-            <th>Statut</th>
-            <th>Relance</th>
-            <th class="col-last">Dernière action</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-      <p class="empty" id="empty" hidden>Aucun lead ne correspond à ces filtres.</p>
+    <main id="view-all" class="view" hidden>
+      <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
+      <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
+      <section class="toolbar">
+        <input id="f-q" type="search" placeholder="Rechercher un salon, une gérante, une ville, un numéro…" aria-label="Recherche">
+        <select id="f-priority" aria-label="Priorité">
+          <option value="">Toutes priorités</option>
+          <option value="A">Priorité A</option>
+          <option value="B">Priorité B</option>
+          <option value="C">Priorité C</option>
+        </select>
+        <select id="f-sector" aria-label="Secteur"><option value="">Tous secteurs</option></select>
+        <select id="f-phone" aria-label="Téléphone">
+          <option value="">Tous téléphones</option>
+          <option value="fixe">Fixe</option>
+          <option value="mobile">Mobile</option>
+          <option value="voip">Box (09)</option>
+          <option value="aucun">Sans numéro</option>
+        </select>
+        <select id="f-reach" aria-label="Canal disponible">
+          <option value="">Tous canaux</option>
+          <option value="instagram">Avec Instagram</option>
+          <option value="email">Avec e-mail</option>
+          <option value="linkedin">Avec LinkedIn</option>
+        </select>
+        <label class="check"><input id="f-unclaimed" type="checkbox"> Fiche non revendiquée</label>
+        <label class="check"><input id="f-due" type="checkbox"> À relancer</label>
+        <span class="count" id="count"></span>
+      </section>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead>
+            <tr>
+              <th><button type="button" data-sort="score">Prio</button></th>
+              <th><button type="button" data-sort="name">Établissement</button></th>
+              <th class="col-city"><button type="button" data-sort="city">Ville</button></th>
+              <th class="col-reviews"><button type="button" data-sort="reviews_count">Avis</button></th>
+              <th>Téléphone</th>
+              <th><button type="button" data-sort="crm_status">Statut</button></th>
+              <th><button type="button" data-sort="next_action_at">Relance</button></th>
+              <th class="col-last"><button type="button" data-sort="last_activity_at">Dernière action</button></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden></div>
+      </div>
     </main>
 
+    <div class="scrim" id="scrim" hidden></div>
     <aside class="panel" id="panel" hidden aria-label="Fiche du lead"></aside>
 
     <dialog id="import-dialog">
       <form id="import-form" method="dialog" class="dialog-body">
         <h2>Importer un export Apify</h2>
-        <p class="muted">Fichier XLSX ou JSON de <code>compass/crawler-google-places</code>. Réimporter un fichier ne crée pas de doublon, et les statuts CRM sont conservés.</p>
+        <p class="muted">Fichier XLSX ou JSON de <code>compass/crawler-google-places</code>. Réimporter un fichier ne crée pas de doublon et conserve les statuts.</p>
         <input type="file" id="import-file" accept=".xlsx,.json" required>
         <div id="import-result" class="import-result"></div>
         <div class="dialog-actions">
-          <button type="button" id="import-close" class="ghost">Fermer</button>
-          <button type="submit" id="import-submit" class="primary">Importer</button>
+          <button type="button" id="import-close" class="btn ghost">Fermer</button>
+          <button type="submit" id="import-submit" class="btn primary">Importer</button>
         </div>
       </form>
     </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
   </div>
 
   <script type="module" src="/app.js"></script>
