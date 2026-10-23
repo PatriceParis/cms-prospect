@@ -290,6 +290,32 @@ textarea { resize: vertical; width: 100%; }
 }
 .kpi b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .kpi span { color: var(--muted); font-size: 12.5px; }
+.legend { margin: -4px 0 16px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+.legend strong { color: var(--text-2); }
+.legend .prio { width: 20px; height: 20px; font-size: 11px; border-radius: 5px; vertical-align: middle; display: inline-grid; }
+.active-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 12px; }
+.chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.chip:hover { filter: brightness(0.97); }
+.linklike { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+.linklike:hover { text-decoration: underline; }
+.today-explain { margin: 6px 0 0; max-width: 640px; }
+.score-why { margin-top: 10px; }
+.score-list { list-style: none; margin: 8px 0 6px; padding: 0; display: grid; gap: 4px; }
+.score-list li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.score-list li b { font-variant-numeric: tabular-nums; }
+.score-list li.total { border-top: 1px solid var(--border); padding-top: 4px; font-weight: 600; }
 .status-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .tab {
   border: 1px solid var(--border);

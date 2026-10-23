@@ -45,6 +45,11 @@
 
     <main id="view-all" class="view" hidden>
       <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
+      <p class="legend">
+        <strong>Priorité</strong> : <span class="prio prio-A">A</span> score de 7 ou 8 sur 8, les plus prometteurs · <span class="prio prio-B">B</span> 5 ou 6 · <span class="prio prio-C">C</span> 4 ou moins.
+        Le score additionne le nombre d’avis (1 à 3 points), une note de 4,5 ou plus (1), une fiche Google non revendiquée (2), un téléphone (1) et au moins 10 photos (1).
+        Les indicateurs ci-dessus portent sur tous les leads, quels que soient les filtres.
+      </p>
       <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
       <section class="toolbar">
         <input id="f-q" type="search" placeholder="Rechercher un salon, une gérante, une ville, un numéro…" aria-label="Recherche">
@@ -72,11 +77,12 @@
         <label class="check"><input id="f-due" type="checkbox"> À relancer</label>
         <span class="count" id="count"></span>
       </section>
+      <div class="active-filters" id="active-filters" hidden></div>
       <div class="table-wrap">
         <table class="leads">
           <thead>
             <tr>
-              <th><button type="button" data-sort="score">Prio</button></th>
+              <th><button type="button" data-sort="score" title="Priorité : A = score de 7 ou 8 sur 8, B = 5 ou 6, C = 4 ou moins">Prio</button></th>
               <th><button type="button" data-sort="name">Établissement</button></th>
               <th class="col-city"><button type="button" data-sort="city">Ville</button></th>
               <th class="col-reviews"><button type="button" data-sort="reviews_count">Avis</button></th>

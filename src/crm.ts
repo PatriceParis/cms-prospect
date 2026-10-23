@@ -1,4 +1,5 @@
 import type { Client, InStatement, Row } from '@libsql/client';
+import { computeScore } from './score.ts';
 
 export type LeadFields = Record<string, unknown>;
 const plain = (r: Row): LeadFields => ({ ...r });
@@ -79,7 +80,16 @@ export async function getLead(db: Client, placeId: string): Promise<LeadFields &
     sql: 'SELECT id, at, author, kind, from_status, to_status, channel, body FROM activities WHERE place_id = ? ORDER BY at DESC, id DESC',
     args: [placeId],
   });
-  return { ...plain(lead.rows[0]), activities: activities.rows.map(plain) };
+  const l = plain(lead.rows[0]);
+  // Détail du score, recalculé avec la règle de src/score.ts pour l'expliquer dans la fiche.
+  const { points } = computeScore({
+    reviewsCount: Number(l.reviews_count),
+    rating: l.rating === null ? null : Number(l.rating),
+    claimed: Number(l.claimed) === 1,
+    hasPhone: l.phone !== null,
+    photosCount: Number(l.photos_count),
+  });
+  return { ...l, score_points: points, activities: activities.rows.map(plain) };
 }
 
 export type LeadChange = {

@@ -241,6 +241,7 @@ function queueItem(l, why) {
 
 function renderToday(queue) {
   const { due, fresh, done } = queue;
+  const remaining = state.leads.filter(l => l.crm_status === 'A_CONTACTER').length;
   const planned = due.length + fresh.length + done.length;
   const pct = planned ? Math.round((done.length / planned) * 100) : 0;
   const dueWhy = l =>
@@ -253,7 +254,9 @@ function renderToday(queue) {
     <div class="today-head">
       <div>
         <h1>Aujourd'hui</h1>
-        <div class="muted">${esc(frLongDate())} · ${due.length} relance${due.length > 1 ? 's' : ''}, ${fresh.length} nouveau${fresh.length > 1 ? 'x' : ''}</div>
+        <div class="muted">${esc(frLongDate())} · ${due.length} relance${due.length > 1 ? 's' : ''} + ${fresh.length} nouveau${fresh.length > 1 ? 'x' : ''} lead${fresh.length > 1 ? 's' : ''}</div>
+        <p class="sub today-explain">La file du jour propose d’abord les relances dues, puis ${DAILY_NEW} nouveaux leads par jour, par ordre de score (priorité A d’abord).
+        ${remaining} lead${remaining > 1 ? 's' : ''} sur ${state.leads.length} ${remaining > 1 ? 'restent' : 'reste'} à contacter au total · <button type="button" class="linklike" data-goto-all>voir tous les leads</button></p>
       </div>
       <div class="progress" aria-label="Avancement du jour">
         <div class="sub">${done.length} contacté${done.length > 1 ? 's' : ''} sur ${planned}</div>
@@ -269,6 +272,7 @@ function renderToday(queue) {
 }
 
 $('#view-today').addEventListener('click', e => {
+  if (e.target.closest('[data-goto-all]')) return setView('all');
   if (e.target.closest('a')) return; // les liens Appeler / WhatsApp / DM agissent seuls
   const item = e.target.closest('.q-item');
   if (item) openLead(item.dataset.id);
@@ -315,7 +319,8 @@ function renderAll() {
   renderTabs();
   const rows = sorted(state.leads.filter(l => matches(l, state.filters)));
   state.navIds = rows.map(l => l.place_id);
-  $('#count').textContent = `${rows.length} / ${state.leads.length} leads`;
+  $('#count').textContent = `${rows.length} lead${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''} sur ${state.leads.length}`;
+  renderActiveFilters(rows.length);
   $('#empty').hidden = rows.length > 0;
   $('#empty').textContent = state.leads.length ? 'Aucun lead ne correspond à ces filtres.' : 'Aucun lead pour l’instant : importe un export Apify depuis le menu ⋯.';
   $('#rows').innerHTML = rows.map(rowHtml).join('');
@@ -340,21 +345,58 @@ function rowHtml(l) {
   </tr>`;
 }
 
+// Indicateurs sur l'ensemble des leads, quels que soient les filtres de la liste.
 function renderKpis() {
   const all = state.leads;
   const touched = all.filter(l => l.crm_status !== 'A_CONTACTER');
   const replied = all.filter(l => ['REP_POSITIVE', 'REP_NEGATIVE', 'NE_PAS_CONTACTER'].includes(l.crm_status));
   const pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : '—');
-  const kpi = (value, label) => `<div class="kpi"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+  const kpi = (value, label, hint) => `<div class="kpi" title="${esc(hint)}"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
   $('#kpis').innerHTML = [
-    kpi(all.length, 'leads'),
-    kpi(all.filter(l => l.priority === 'A').length, 'priorité A'),
-    kpi(touched.length, 'contactés'),
-    kpi(pct(replied.length, touched.length), 'taux de réponse'),
-    kpi(all.filter(l => l.crm_status === 'REP_POSITIVE').length, 'intéressés'),
-    kpi(all.filter(l => l.instagram || l.email).length, 'joignables hors téléphone'),
+    kpi(all.length, 'leads au total', 'Tous les leads ciblés, hors fiches écartées à l’import'),
+    kpi(all.filter(l => l.crm_status === 'A_CONTACTER').length, 'à contacter', 'Jamais contactés'),
+    kpi(touched.length, 'déjà contactés', 'Au moins un contact noté'),
+    kpi(pct(replied.length, touched.length), 'taux de réponse', 'Réponses reçues (intéressé, pas intéressé, opposition) rapportées aux leads contactés'),
+    kpi(all.filter(l => l.crm_status === 'REP_POSITIVE').length, 'intéressés', 'Statut RÉP POSITIVE'),
+    kpi(all.filter(l => l.priority === 'A').length, 'en priorité A', 'Score de 7 ou 8 sur 8 : les plus prometteurs'),
   ].join('');
 }
+
+const FILTER_LABELS = {
+  q: v => `Recherche « ${v} »`,
+  priority: v => `Priorité ${v}`,
+  sector: v => v,
+  phone: v => ({ fixe: 'Téléphone fixe', mobile: 'Téléphone mobile', voip: 'Box (09)', aucun: 'Sans numéro' })[v] ?? v,
+  reach: v => ({ instagram: 'Avec Instagram', email: 'Avec e-mail', linkedin: 'Avec LinkedIn' })[v] ?? v,
+  status: v => `Statut ${state.statuses[v] ?? v}`,
+  unclaimed: () => 'Fiche non revendiquée',
+  due: () => 'À relancer',
+};
+
+function renderActiveFilters(shown) {
+  const active = Object.entries(state.filters).filter(([, v]) => v);
+  const bar = $('#active-filters');
+  bar.hidden = !active.length;
+  bar.innerHTML = active.length
+    ? `<span class="sub">Filtres actifs :</span>
+       ${active.map(([k, v]) => `<button type="button" class="chip" data-clear="${esc(k)}" title="Retirer ce filtre">${esc(FILTER_LABELS[k](v))} <span aria-hidden="true">✕</span></button>`).join('')}
+       <button type="button" class="btn ghost sm" data-clear-all>Tout effacer</button>
+       <span class="sub">${shown} lead${shown > 1 ? 's' : ''} affiché${shown > 1 ? 's' : ''} sur ${state.leads.length}</span>`
+    : '';
+}
+
+$('#active-filters').addEventListener('click', e => {
+  const one = e.target.closest('[data-clear]');
+  if (one) {
+    const key = one.dataset.clear;
+    state.filters[key] = DEFAULT_FILTERS[key];
+  } else if (e.target.closest('[data-clear-all]')) {
+    state.filters = { ...DEFAULT_FILTERS };
+  } else return;
+  savePrefs();
+  syncFilterInputs();
+  render();
+});
 
 function renderTabs() {
   const base = state.leads.filter(l => matches(l, state.filters, { ignoreStatus: true }));
@@ -527,7 +569,7 @@ function renderPanel() {
   $('#panel').innerHTML = `
     <header class="p-head">
       <div>
-        <div class="p-kicker">${prioBadge(d)} Score ${esc(d.score)}/8 · ${esc(d.google_category)}</div>
+        <div class="p-kicker">${prioBadge(d)} Priorité ${esc(d.priority)} · score ${esc(d.score)}/8 · ${esc(d.google_category)}</div>
         <h2>${esc(d.name)}</h2>
         <div class="sub">${who ? `${esc(who)}${d.contact_role ? `, ${esc(d.contact_role)}` : ''} · ` : ''}${esc(d.city)}</div>
       </div>
@@ -544,6 +586,7 @@ function renderPanel() {
         ${d.next_action_at ? `<span class="sub ${isDue(d) ? 'overdue' : ''}">Relance le ${esc(frDate(d.next_action_at))}</span>` : ''}
         ${d.claimed ? '' : '<span class="tag warn">fiche non revendiquée</span>'}
       </div>
+      ${scoreDetail(d)}
       ${locked ? '<p class="notice stop">Opposition enregistrée : ne plus contacter ce lead, sur aucun canal.</p>' : ''}
       ${!locked && doneToday ? '<p class="notice">Déjà contacté aujourd’hui : prochain contact demain au plus tôt. Une réponse reçue peut toujours être notée.</p>' : ''}
       ${!locked && d.phone_kind === 'mobile' ? '<p class="notice">Numéro mobile : vérifie en début d’appel qu’il s’agit bien de la ligne du salon.</p>' : ''}
@@ -591,6 +634,25 @@ function renderPanel() {
       <p class="kbd">Raccourcis : ↑ ↓ lead précédent / suivant · Échap fermer</p>
     </div>
   `;
+}
+
+// Détail du score (calculé côté serveur avec la règle de src/score.ts).
+function scoreDetail(d) {
+  const p = d.score_points;
+  if (!p) return '';
+  const rating = String(d.rating ?? '—').replace('.', ',');
+  const row = (label, pts) => `<li><span>${label}</span><b>+${pts}</b></li>`;
+  return `<details class="more score-why"><summary>Pourquoi priorité ${esc(d.priority)} ?</summary>
+    <ul class="score-list">
+      ${row(`${esc(d.reviews_count)} avis <span class="sub">(30 et plus : 3, de 10 à 29 : 2, sinon 1)</span>`, p.reviews)}
+      ${row(`Note ${esc(rating)}/5 <span class="sub">(4,5 ou plus : 1)</span>`, p.rating)}
+      ${row(d.claimed ? 'Fiche Google revendiquée <span class="sub">(non revendiquée : 2)</span>' : 'Fiche Google non revendiquée', p.unclaimed)}
+      ${row(d.phone ? 'Téléphone sur la fiche' : 'Pas de téléphone sur la fiche', p.phone)}
+      ${row(`${esc(d.photos_count)} photos <span class="sub">(10 ou plus : 1)</span>`, p.photos)}
+      <li class="total"><span>Score</span><b>${esc(d.score)}/8</b></li>
+    </ul>
+    <p class="sub">Priorité A : 7 ou 8 · B : 5 ou 6 · C : 4 ou moins.</p>
+  </details>`;
 }
 
 function activityHtml(a) {
