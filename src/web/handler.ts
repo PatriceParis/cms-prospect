@@ -75,7 +75,13 @@ export function createHandler(deps: HandlerDeps) {
           TURSO_AUTH_TOKEN: Boolean(process.env.TURSO_AUTH_TOKEN),
         };
         const similarNames = Object.keys(process.env).filter(k => /crm|turso|libsql|password/i.test(k) && !(k in config));
-        return send(res, 200, { ok: Object.values(config).every(Boolean), config, similarNames });
+        return send(res, 200, {
+          ok: Object.values(config).every(Boolean),
+          config,
+          similarNames,
+          vercelEnv: process.env.VERCEL_ENV ?? null,
+          envCount: Object.keys(process.env).length,
+        });
       }
 
       if (!password) throw new CrmError("CRM_PASSWORD n'est pas défini : l'accès est fermé.", 503);
