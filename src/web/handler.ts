@@ -67,21 +67,21 @@ export function createHandler(deps: HandlerDeps) {
     const password = deps.password();
 
     try {
-      // Diagnostic public : dit quelles variables sont présentes, jamais leurs valeurs.
+      // Diagnostic public : présence des variables (jamais leurs valeurs) et accès à la base.
       if (path === '/api/health' && method === 'GET') {
         const config = {
           CRM_PASSWORD: Boolean(password),
           TURSO_DATABASE_URL: Boolean(process.env.TURSO_DATABASE_URL),
           TURSO_AUTH_TOKEN: Boolean(process.env.TURSO_AUTH_TOKEN),
         };
-        const similarNames = Object.keys(process.env).filter(k => /crm|turso|libsql|password/i.test(k) && !(k in config));
-        return send(res, 200, {
-          ok: Object.values(config).every(Boolean),
-          config,
-          similarNames,
-          vercelEnv: process.env.VERCEL_ENV ?? null,
-          envCount: Object.keys(process.env).length,
-        });
+        let database: 'ok' | 'injoignable' = 'injoignable';
+        try {
+          await (await deps.getDb()).execute('SELECT 1');
+          database = 'ok';
+        } catch (err) {
+          console.error('health: base injoignable', err);
+        }
+        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, database });
       }
 
       if (!password) throw new CrmError("CRM_PASSWORD n'est pas défini : l'accès est fermé.", 503);
