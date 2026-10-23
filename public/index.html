@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Prospection TPE</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5bd3'/%3E%3Cpath d='M9 22V10h8a4 4 0 0 1 0 8h-8' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h1>Prospection TPE</h1>
+      <p class="muted">Accès réservé.</p>
+      <label>Prénom <input name="name" autocomplete="given-name" required maxlength="40"></label>
+      <label>Mot de passe <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary">Se connecter</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">Prospection TPE</div>
+      <div class="kpis" id="kpis"></div>
+      <div class="top-actions">
+        <button type="button" id="import-open">Importer</button>
+        <a class="button" href="/api/export.csv">Exporter CSV</a>
+        <span class="me" id="me"></span>
+        <button type="button" id="logout" class="ghost">Déconnexion</button>
+      </div>
+    </header>
+
+    <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
+
+    <section class="toolbar">
+      <input id="f-q" type="search" placeholder="Rechercher un nom, une ville, un téléphone…" aria-label="Recherche">
+      <select id="f-priority" aria-label="Priorité">
+        <option value="">Toutes priorités</option>
+        <option value="A">Priorité A</option>
+        <option value="B">Priorité B</option>
+        <option value="C">Priorité C</option>
+      </select>
+      <select id="f-sector" aria-label="Secteur"><option value="">Tous secteurs</option></select>
+      <select id="f-phone" aria-label="Téléphone">
+        <option value="">Tous téléphones</option>
+        <option value="fixe">Fixe</option>
+        <option value="mobile">Mobile</option>
+        <option value="voip">Box (09)</option>
+        <option value="aucun">Sans numéro</option>
+      </select>
+      <label class="check"><input id="f-unclaimed" type="checkbox"> Fiche non revendiquée</label>
+      <label class="check"><input id="f-due" type="checkbox"> À relancer aujourd'hui</label>
+      <span class="count" id="count"></span>
+    </section>
+
+    <main class="table-wrap">
+      <table class="leads">
+        <thead>
+          <tr>
+            <th>Prio</th>
+            <th>Établissement</th>
+            <th class="col-city">Ville</th>
+            <th class="col-reviews">Avis</th>
+            <th>Téléphone</th>
+            <th>Statut</th>
+            <th>Relance</th>
+            <th class="col-last">Dernière action</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="empty" id="empty" hidden>Aucun lead ne correspond à ces filtres.</p>
+    </main>
+
+    <aside class="panel" id="panel" hidden aria-label="Fiche du lead"></aside>
+
+    <dialog id="import-dialog">
+      <form id="import-form" method="dialog" class="dialog-body">
+        <h2>Importer un export Apify</h2>
+        <p class="muted">Fichier XLSX ou JSON de <code>compass/crawler-google-places</code>. Réimporter un fichier ne crée pas de doublon, et les statuts CRM sont conservés.</p>
+        <input type="file" id="import-file" accept=".xlsx,.json" required>
+        <div id="import-result" class="import-result"></div>
+        <div class="dialog-actions">
+          <button type="button" id="import-close" class="ghost">Fermer</button>
+          <button type="submit" id="import-submit" class="primary">Importer</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

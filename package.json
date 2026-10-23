@@ -9,6 +9,8 @@
   "scripts": {
     "ingest": "node --disable-warning=ExperimentalWarning src/cli.ts ingest",
     "score": "node --disable-warning=ExperimentalWarning src/cli.ts score",
+    "crm": "node --disable-warning=ExperimentalWarning src/web/dev.ts",
+    "build": "node scripts/build-vercel.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test",
     "typecheck": "tsc --noEmit"
   },

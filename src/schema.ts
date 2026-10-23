@@ -27,6 +27,18 @@ const STATEMENTS = [
     first_seen_at   TEXT NOT NULL,
     updated_at      TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS activities (
+    id          INTEGER PRIMARY KEY,
+    place_id    TEXT NOT NULL REFERENCES leads(place_id),
+    at          TEXT NOT NULL,
+    author      TEXT NOT NULL,
+    kind        TEXT NOT NULL,        -- statut | note | relance
+    from_status TEXT,
+    to_status   TEXT,
+    channel     TEXT,
+    body        TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS activities_by_lead ON activities (place_id, at)`,
   `CREATE TABLE IF NOT EXISTS ingest_runs (
     id            INTEGER PRIMARY KEY,
     file          TEXT NOT NULL,
@@ -41,6 +53,18 @@ const STATEMENTS = [
   )`,
 ];
 
+// Colonnes ajoutées après la création de la table : ajoutées à chaud si absentes.
+const ADDED_LEAD_COLUMNS: [name: string, ddl: string][] = [
+  ['crm_status', `TEXT NOT NULL DEFAULT 'A_CONTACTER'`],
+  ['crm_channel', 'TEXT'],
+  ['next_action_at', 'TEXT'], // AAAA-MM-JJ
+  ['crm_updated_at', 'TEXT'],
+];
+
 export async function migrate(db: Client): Promise<void> {
   await db.batch(STATEMENTS, 'write');
+  const { rows } = await db.execute('PRAGMA table_info(leads)');
+  const present = new Set(rows.map(r => String(r.name)));
+  const missing = ADDED_LEAD_COLUMNS.filter(([name]) => !present.has(name));
+  if (missing.length) await db.batch(missing.map(([name, ddl]) => `ALTER TABLE leads ADD COLUMN ${name} ${ddl}`), 'write');
 }

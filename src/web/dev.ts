@@ -1,0 +1,39 @@
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { extname, join, normalize, resolve } from 'node:path';
+import { openDb } from '../db.ts';
+import { createHandler } from './handler.ts';
+
+// Serveur local : sert public/ et l'API sur la base locale (ou Turso si configuré).
+if (existsSync('.env')) process.loadEnvFile('.env');
+
+const PUBLIC_DIR = resolve('public');
+const PORT = Number(process.env.PORT ?? 3000);
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+const db = await openDb();
+const api = createHandler({ getDb: async () => db, password: () => process.env.CRM_PASSWORD });
+
+createServer(async (req, res) => {
+  const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+  if (pathname === '/api' || pathname.startsWith('/api/')) return api(req, res);
+
+  const file = normalize(join(PUBLIC_DIR, pathname === '/' ? 'index.html' : decodeURIComponent(pathname)));
+  if (!file.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403).end();
+    return;
+  }
+  try {
+    const body = await readFile(file);
+    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' }).end(body);
+  } catch {
+    res.writeHead(404).end('Not found');
+  }
+}).listen(PORT, () => console.log(`CRM local : http://localhost:${PORT}`));
