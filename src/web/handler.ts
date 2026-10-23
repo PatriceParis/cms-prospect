@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename } from 'node:path';
 import type { Client } from '@libsql/client';
@@ -81,7 +82,11 @@ export function createHandler(deps: HandlerDeps) {
         } catch (err) {
           console.error('health: base injoignable', err);
         }
-        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, database });
+        // Empreinte de l'adresse de la base : permet de vérifier qu'un poste et la production
+        // visent la même base Turso sans jamais exposer l'adresse elle-même.
+        const url = process.env.TURSO_DATABASE_URL;
+        const databaseFingerprint = url ? createHash('sha256').update(url).digest('hex').slice(0, 8) : null;
+        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, database, databaseFingerprint });
       }
 
       if (!password) throw new CrmError("CRM_PASSWORD n'est pas défini : l'accès est fermé.", 503);
