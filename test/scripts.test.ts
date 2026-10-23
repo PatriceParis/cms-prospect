@@ -12,6 +12,8 @@ const lead = {
   rating: 4.8,
   claimed: 0,
   contact_first_name: 'Claire',
+  contact_last_name: 'Martin',
+  phone_kind: 'mobile',
   crm_status: 'A_CONTACTER',
 };
 const friday = new Date('2026-10-23T10:00:00');
@@ -33,13 +35,30 @@ describe('scripts', () => {
 
   it('personnalise prénom, salon, avis, fiche non revendiquée et lien de preview', () => {
     const s = buildScripts(lead, settings, { now: friday });
-    assert.match(s.call.steps[0].text, /parler à Claire/);
-    assert.match(s.call.steps[1].text, /vos 48 avis à 4,8\/5/);
+    assert.match(s.call.steps[0].text, /parler à Claire Martin ou à la personne qui gère le salon/);
+    assert.match(s.call.steps[1].text, /^Je suis Camille de Vitrine Locale\. .*vos 48 avis à 4,8\/5/);
     assert.match(s.call.steps[2].text, /pas encore revendiquée/);
     assert.match(s.call.steps[3].text, /mardi/); // rappel à J+2 ouvrés depuis un vendredi
     assert.match(s.instagram, /^Bonjour Claire,/);
     assert.ok(s.instagram.includes(previewUrl(lead)!));
     assert.match(s.whatsapp, /numéro figure sur votre fiche Google/);
+  });
+
+  it('propose un canal d’envoi réel : jamais de SMS ni de WhatsApp vers un fixe', () => {
+    const proposal = (over: object) => buildScripts({ ...lead, ...over }, settings).call.steps[3].text;
+    assert.match(proposal({}), /par SMS ou WhatsApp/);
+    assert.match(proposal({ phone_kind: 'fixe', instagram: 'zephyr' }), /en message sur Instagram/);
+    assert.match(proposal({ phone_kind: 'fixe', email: 'a@b.fr' }), /par e-mail un exemple|envoie par e-mail/);
+    assert.match(proposal({ phone_kind: 'fixe' }), /à quelle adresse/);
+    const voicemail = buildScripts({ ...lead, phone_kind: 'fixe' }, settings).call.voicemail;
+    assert.match(voicemail, /^Bonjour, Camille de Vitrine Locale\./);
+    assert.doesNotMatch(voicemail, /par message|SMS|WhatsApp/);
+  });
+
+  it('fiche revendiquée : le constat ne promet pas la réservation (souvent déjà sur Planity)', () => {
+    const s = buildScripts({ ...lead, claimed: 1 }, settings);
+    assert.match(s.call.steps[2].text, /pas sur un site qui présente vos prestations et vos photos/);
+    assert.doesNotMatch(s.call.steps[2].text, /réserver/);
   });
 
   it('chaque message prospect laisse une porte de sortie', () => {

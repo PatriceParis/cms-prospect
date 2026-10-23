@@ -86,29 +86,39 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
   const callBack = weekday(addBusinessDays(2, now));
   const followUp = isFollowUp(lead);
   const optOut = 'Si ce n’est pas le moment, dites-le-moi simplement et je ne vous relancerai pas.';
+  // Nom complet pour l'appel : il vient du registre, la personne qui décroche ne connaît
+  // pas forcément le prénom seul. Le tutoiement du prénom reste réservé aux DM.
+  const fullName = [lead.contact_first_name, lead.contact_last_name].map(s => String(s ?? '').trim()).filter(Boolean).join(' ');
+  // Canal réel pour envoyer l'exemple : pas de SMS ni de WhatsApp vers un fixe.
+  const via = lead.phone_kind === 'mobile' ? 'par SMS ou WhatsApp'
+    : lead.instagram ? 'en message sur Instagram'
+    : lead.email ? 'par e-mail'
+    : null;
 
   // --- Appel -------------------------------------------------------------------------
   const call = {
     steps: [
       {
         title: 'Ouverture',
-        text: `Bonjour, je suis bien chez ${salon} ? Je souhaiterais parler à ${first || `la personne qui gère ${sector.the}`}, s’il vous plaît.`,
+        text: `Bonjour, je suis bien chez ${salon} ? Je souhaiterais parler à ${fullName ? `${fullName} ou à la personne qui gère ${sector.the}` : `la personne qui gère ${sector.the}`}, s’il vous plaît.`,
       },
       {
         title: 'Présentation (moins de 20 secondes)',
-        text: `${first ? `${first}, je` : 'Je'} suis ${sender} de ${brand}. Je vous appelle parce que j’ai vu ${hook} : bravo. Je vois que vous n’avez pas de site internet. On en crée pour les ${sector.place}s ${ofCity(city)}, déjà remplis à partir de votre fiche Google. Je vous prends deux minutes ?`,
+        text: `Je suis ${sender} de ${brand}. Je vous appelle parce que j’ai vu ${hook} : bravo. Je vois que vous n’avez pas de site internet. On en crée pour les ${sector.place}s ${ofCity(city)}, déjà remplis à partir de votre fiche Google. Je vous prends deux minutes ?`,
       },
       {
         title: 'Constat',
         text: unclaimed
           ? `Votre fiche Google n’est pas encore revendiquée : vous ne pouvez pas répondre aux avis en tant que propriétaire, et n’importe qui peut y proposer des modifications. On vous guide pour la récupérer, c’est gratuit.`
-          : `Aujourd’hui, quand quelqu’un cherche « ${sector.search} ${city} », il tombe sur votre fiche, mais sans site pour vous découvrir, voir vos prestations et réserver.`,
+          : `Aujourd’hui, quand quelqu’un cherche « ${sector.search} ${city} », il tombe sur votre fiche, mais pas sur un site qui présente vos prestations et vos photos.`,
       },
       {
         title: 'Proposition',
-        text: link
-          ? `Je vous envoie par message un exemple de site pour ${sector.kind}, vous regardez tranquillement, et je vous rappelle ${callBack} pour avoir votre avis. Ça vous va ?`
-          : `Je peux vous préparer un aperçu de votre site à partir de votre fiche Google, sans engagement. Je vous rappelle ${callBack} pour vous le montrer ?`,
+        text: !link
+          ? `Je peux vous préparer un aperçu de votre site à partir de votre fiche Google, sans engagement. Je vous rappelle ${callBack} pour vous le montrer ?`
+          : via
+            ? `Je vous envoie ${via} un exemple de site pour ${sector.kind}, vous regardez tranquillement, et je vous rappelle ${callBack} pour avoir votre avis. Ça vous va ?`
+            : `Je peux vous envoyer par e-mail un exemple de site pour ${sector.kind} : à quelle adresse ? Je vous rappelle ${callBack} pour avoir votre avis. (Note l’adresse dans la fiche.)`,
       },
       {
         title: 'Si on vous demande le prix',
@@ -116,13 +126,13 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
       },
     ],
     objections: [
-      { q: '« Je n’ai pas le temps »', a: `Je comprends, c’est pour ça qu’on remplit tout à partir de votre fiche Google. Je vous envoie l’exemple, trente secondes à regarder, et je vous rappelle ${callBack}.` },
+      { q: '« Je n’ai pas le temps »', a: `Je comprends, c’est pour ça qu’on remplit tout à partir de votre fiche Google. Je vous envoie l’exemple ${via ?? 'par e-mail (à quelle adresse ?)'}, trente secondes à regarder, et je vous rappelle ${callBack}.` },
       { q: '« J’ai déjà Instagram / Planity »', a: `C’est très bien pour vos clients actuels et la réservation. Le site, c’est ce que Google met en avant quand quelqu’un cherche « ${sector.search} ${city} » sans vous connaître.` },
       { q: '« C’est trop cher »', a: `C’est ${OFFER.presence}, sans engagement : si ça ne vous apporte rien, vous arrêtez quand vous voulez.` },
       { q: '« Envoyez-moi un mail »', a: 'Avec plaisir. À quelle adresse ? (Note-la dans la fiche.)' },
       { q: '« Ça ne m’intéresse pas »', a: 'Très bien, merci de m’avoir répondu. Je note de ne pas vous rappeler. (Résultat : Pas intéressé. Si la personne demande à ne plus être contactée : Ne plus contacter.)' },
     ],
-    voicemail: `${hello}, ${sender} de ${brand}. Je vous appelais au sujet d’un site internet pour ${salon}. Je vous envoie ${link ? 'un exemple' : 'quelques informations'} par message et je vous rappelle ${callBack}. Bonne journée !`,
+    voicemail: `Bonjour, ${sender} de ${brand}. Je vous appelais au sujet d’un site internet pour ${salon}. ${via ? `Je vous envoie ${link ? 'un exemple' : 'quelques informations'} ${via} et je vous rappelle ${callBack}.` : `Je vous rappelle ${callBack}.`} Bonne journée !`,
   };
 
   // --- Messages (Instagram, WhatsApp) ------------------------------------------------------
