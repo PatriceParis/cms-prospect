@@ -7,8 +7,9 @@ import { migrate } from './schema.ts';
 export const LOCAL_DB_URL = 'file:data/prospection.db';
 
 export async function openDb(url = process.env.TURSO_DATABASE_URL ?? LOCAL_DB_URL): Promise<Client> {
-  if (url.startsWith('file:')) mkdirSync('data', { recursive: true });
-  const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+  const local = url.startsWith('file:');
+  if (local) mkdirSync('data', { recursive: true });
+  const db = createClient({ url, authToken: local ? undefined : process.env.TURSO_AUTH_TOKEN });
   await migrate(db);
   return db;
 }

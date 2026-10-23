@@ -1,5 +1,6 @@
 // Mini CRM de prospection. JavaScript natif, aucune dépendance.
 // Deux vues : « Aujourd'hui » (la file de travail du SDR) et « Tous les leads ».
+import { buildScripts, SETTINGS_KEY } from '/scripts.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -39,7 +40,17 @@ const state = {
   selectedId: null,
   detail: null,
   pickChannel: 'telephone',
+  scriptTab: 'call',
+  settings: loadSettings(),
 };
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
 
 // --- Utilitaires -----------------------------------------------------------------
 
@@ -406,7 +417,77 @@ async function openLead(id) {
   }
   const d = state.detail;
   state.pickChannel = d.phone ? 'telephone' : d.instagram ? 'instagram' : d.email ? 'email' : 'autre';
+  state.scriptTab = scriptTabs(d)[0]?.key ?? 'call';
   renderPanel();
+}
+
+// --- Scripts et messages ------------------------------------------------------------------
+
+function scriptTabs(d) {
+  return [
+    d.phone && { key: 'call', label: 'Appel' },
+    d.instagram && { key: 'instagram', label: 'Instagram' },
+    d.phone_kind === 'mobile' && { key: 'whatsapp', label: 'WhatsApp' },
+    d.email && { key: 'email', label: 'E-mail' },
+  ].filter(Boolean);
+}
+
+function messageBlock(text, actions) {
+  return `<pre class="msg">${esc(text)}</pre><div class="msg-actions">${actions}</div>`;
+}
+
+function scriptSection(d) {
+  const tabs = scriptTabs(d);
+  if (!tabs.length) return '';
+  const s = buildScripts(d, state.settings);
+  state.scripts = s;
+  const title = `Script${s.followUp ? ' · relance' : ''}`;
+  if (s.missing.length) {
+    return `<section class="p-section"><h3>${title}</h3>
+      <p class="notice">Renseigne ton prénom et le nom de la marque pour activer les scripts et les messages.
+      <button type="button" class="btn sm" data-settings>Régler</button></p></section>`;
+  }
+  const tab = tabs.some(t => t.key === state.scriptTab) ? state.scriptTab : tabs[0].key;
+  let body = '';
+  if (tab === 'call') {
+    body = `<ol class="steps">${s.call.steps.map(x => `<li><b>${esc(x.title)}</b><p>${esc(x.text)}</p></li>`).join('')}</ol>
+      <details class="more"><summary>Objections fréquentes</summary><dl class="objections">${s.call.objections.map(o => `<dt>${esc(o.q)}</dt><dd>${esc(o.a)}</dd>`).join('')}</dl></details>
+      <details class="more"><summary>Message à laisser sur la messagerie</summary><p class="voicemail">${esc(s.call.voicemail)}</p></details>`;
+  } else if (tab === 'instagram') {
+    body = messageBlock(s.instagram, `<button type="button" class="btn sm primary" data-copy="instagram" data-open-url="https://ig.me/m/${esc(d.instagram)}" data-channel-used="instagram">Copier et ouvrir le DM</button><button type="button" class="btn sm" data-copy="instagram">Copier</button>`);
+  } else if (tab === 'whatsapp') {
+    const wa = `https://wa.me/${String(d.phone).replace(/\D/g, '')}?text=${encodeURIComponent(s.whatsapp)}`;
+    body = messageBlock(s.whatsapp, `<a class="btn sm primary" href="${esc(wa)}" target="_blank" rel="noopener noreferrer" data-channel-used="whatsapp">Ouvrir WhatsApp avec ce message</a><button type="button" class="btn sm" data-copy="whatsapp">Copier</button>`);
+  } else if (tab === 'email') {
+    const mailto = `mailto:${d.email}?subject=${encodeURIComponent(s.email.subject)}&body=${encodeURIComponent(s.email.body)}`;
+    body = `<div class="subject"><span class="sub">Objet</span> ${esc(s.email.subject)}</div>` +
+      messageBlock(s.email.body, `<a class="btn sm primary" href="${esc(mailto)}" data-channel-used="email">Ouvrir dans la messagerie</a><button type="button" class="btn sm" data-copy="email">Copier</button>`);
+  }
+  return `<section class="p-section">
+    <h3>${title}</h3>
+    <div class="seg script-tabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-script-tab="${t.key}" aria-selected="${t.key === tab}">${t.label}</button>`).join('')}</div>
+    ${body}
+    <p class="kbd">Après l’envoi, note le résultat ci-dessous (« Contacté, en attente »).</p>
+  </section>`;
+}
+
+function useChannel(channel) {
+  if (!state.channels[channel]) return;
+  state.pickChannel = channel;
+  for (const b of document.querySelectorAll('[data-channel]')) b.setAttribute('aria-checked', b.dataset.channel === channel);
+}
+
+async function copyScript(key) {
+  const s = state.scripts;
+  const text = key === 'email' ? `Objet : ${s.email.subject}\n\n${s.email.body}` : s[key];
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Message copié');
+    return true;
+  } catch {
+    toast('Copie impossible : sélectionne le texte à la main.', { error: true });
+    return false;
+  }
 }
 
 function closePanel() {
@@ -468,6 +549,8 @@ function renderPanel() {
       ${!locked && d.phone_kind === 'mobile' ? '<p class="notice">Numéro mobile : vérifie en début d’appel qu’il s’agit bien de la ligne du salon.</p>' : ''}
 
       ${locked ? '' : `<section class="p-section"><h3>Joindre</h3><div class="reach">${reachButtons(d) || '<span class="muted">Aucun canal connu.</span>'}</div></section>`}
+
+      ${locked ? '' : scriptSection(d)}
 
       <section class="p-section">
         <h3>Noter le résultat</h3>
@@ -559,9 +642,23 @@ async function save(payload, done) {
   }
 }
 
-$('#panel').addEventListener('click', e => {
+$('#panel').addEventListener('click', async e => {
+  // Liens d'envoi (WhatsApp, messagerie) : on laisse le lien s'ouvrir et on présélectionne le canal.
+  const link = e.target.closest('a[data-channel-used]');
+  if (link) return useChannel(link.dataset.channelUsed);
   const t = e.target.closest('button');
   if (!t) return;
+  if (t.dataset.settings !== undefined) return openSettings();
+  if (t.dataset.scriptTab) {
+    state.scriptTab = t.dataset.scriptTab;
+    return renderPanel();
+  }
+  if (t.dataset.copy) {
+    const copied = await copyScript(t.dataset.copy);
+    if (copied && t.dataset.openUrl) window.open(t.dataset.openUrl, '_blank', 'noopener');
+    if (t.dataset.channelUsed) useChannel(t.dataset.channelUsed);
+    return;
+  }
   const d = state.detail;
   const note = $('#note')?.value.trim() ?? '';
   if (t.dataset.action === 'close') return closePanel();
@@ -598,7 +695,7 @@ $('#panel').addEventListener('click', e => {
 $('#scrim').addEventListener('click', closePanel);
 
 document.addEventListener('keydown', e => {
-  if ($('#panel').hidden || $('#import-dialog').open) return;
+  if ($('#panel').hidden || $('#import-dialog').open || $('#settings-dialog').open) return;
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
   if (e.key === 'Escape') return typing ? document.activeElement.blur() : closePanel();
   if (typing) return;
@@ -619,9 +716,29 @@ $('#menu-open').addEventListener('click', e => {
 document.addEventListener('click', e => {
   if (!e.target.closest('.menu-wrap')) toggleMenu(false);
 });
+function openSettings() {
+  const form = $('#settings-form');
+  form.sender.value = state.settings.sender ?? '';
+  form.brand.value = state.settings.brand ?? '';
+  $('#settings-dialog').showModal();
+}
+$('#settings-close').addEventListener('click', () => $('#settings-dialog').close());
+$('#settings-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const form = e.target;
+  state.settings = { sender: form.sender.value.trim(), brand: form.brand.value.trim() };
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  } catch { /* stockage indisponible : réglages gardés pour cette session */ }
+  $('#settings-dialog').close();
+  toast('Réglages enregistrés');
+  if (state.detail) renderPanel();
+});
+
 $('#menu').addEventListener('click', async e => {
   const action = e.target.closest('[data-menu]')?.dataset.menu;
   toggleMenu(false);
+  if (action === 'settings') openSettings();
   if (action === 'import') {
     $('#import-result').innerHTML = '';
     $('#import-form').reset();

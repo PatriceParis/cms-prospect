@@ -32,6 +32,7 @@
       <div class="menu-wrap">
         <button type="button" class="btn ghost icon" id="menu-open" aria-haspopup="true" aria-expanded="false" aria-label="Plus d'actions">⋯</button>
         <div class="menu" id="menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-menu="settings">Réglages des messages</button>
           <button type="button" role="menuitem" data-menu="import">Importer un export Apify</button>
           <a role="menuitem" href="/api/export.csv">Exporter en CSV</a>
           <hr>
@@ -103,6 +104,23 @@
         <div class="dialog-actions">
           <button type="button" id="import-close" class="btn ghost">Fermer</button>
           <button type="submit" id="import-submit" class="btn primary">Importer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog">
+      <form id="settings-form" method="dialog" class="dialog-body">
+        <h2>Réglages des messages</h2>
+        <p class="muted">Utilisés dans les scripts d’appel et les messages. Enregistrés sur cet appareil.</p>
+        <label class="field">Prénom de l’expéditeur
+          <input name="sender" required maxlength="40" autocomplete="given-name">
+        </label>
+        <label class="field">Nom de la marque
+          <input name="brand" required maxlength="60">
+        </label>
+        <div class="dialog-actions">
+          <button type="button" id="settings-close" class="btn ghost">Annuler</button>
+          <button type="submit" class="btn primary">Enregistrer</button>
         </div>
       </form>
     </dialog>

@@ -12,6 +12,7 @@
     "enrich": "node --disable-warning=ExperimentalWarning src/cli.ts enrich",
     "sync": "node --disable-warning=ExperimentalWarning src/cli.ts sync",
     "crm": "node --disable-warning=ExperimentalWarning src/web/dev.ts",
+    "crm:local": "node --disable-warning=ExperimentalWarning src/web/dev.ts --local --port 3001",
     "build": "node scripts/build-vercel.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test",
     "typecheck": "tsc --noEmit"

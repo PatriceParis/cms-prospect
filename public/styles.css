@@ -414,7 +414,7 @@ table.leads { width: 100%; border-collapse: collapse; }
   cursor: pointer;
   color: var(--text-2);
 }
-.seg button[aria-checked="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.seg button[aria-checked="true"], .seg button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .outcome {
   display: grid;
@@ -438,6 +438,28 @@ table.leads { width: 100%; border-collapse: collapse; }
 .more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; align-items: end; }
 .more-grid .btn { grid-column: 1 / -1; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.steps b { font-size: 13px; }
+.steps p { margin: 2px 0 0; color: var(--text-2); }
+.objections { margin: 8px 0 0; display: grid; gap: 4px 0; }
+.objections dt { font-weight: 600; font-size: 13px; margin-top: 6px; }
+.objections dd { margin: 0; color: var(--text-2); }
+.voicemail { margin: 8px 0 0; color: var(--text-2); }
+.msg {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.msg-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.subject { margin-bottom: 6px; font-size: 13.5px; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 7px 16px; margin: 0; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; overflow-wrap: anywhere; }

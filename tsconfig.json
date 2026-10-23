@@ -9,7 +9,14 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "allowJs": true
   },
-  "include": ["src", "test"]
+  "include": [
+    "src",
+    "test",
+    "public/scripts.js"
+  ]
 }

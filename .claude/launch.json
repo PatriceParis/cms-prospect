@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "crm",
+      "name": "crm-local",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "crm"],
-      "port": 3000
+      "runtimeArgs": ["run", "crm:local"],
+      "port": 3001
     }
   ]
 }

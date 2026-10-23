@@ -33,7 +33,10 @@ Accès par un mot de passe partagé (`CRM_PASSWORD`).
 - **Fiche** : canaux de contact, résultat en un clic (pas de réponse → relance J+2, contacté → J+3, intéressé → rappel J+1, pas intéressé, ne plus contacter), lead suivant automatique dans la file, navigation ↑ ↓, historique.
 - **Garde-fous côté serveur** : un seul contact sortant par lead et par jour, tous canaux confondus ; NE PAS CONTACTER est une opposition définitive (plus de statut ni de relance).
 - **Tous les leads** : indicateurs, onglets de statut, filtres (priorité, secteur, téléphone, canal disponible, fiche non revendiquée, à relancer), tri par colonne.
+- **Scripts et messages** (`public/scripts.js`) : script d'appel en cinq temps avec objections et message de messagerie, DM Instagram, WhatsApp pré-rempli (`wa.me`), e-mail (brouillon `mailto:`), et leurs relances pour les leads déjà contactés. Personnalisés avec le prénom de la gérante, le salon, les avis, la fiche non revendiquée et l'exemple de site du secteur (`PREVIEW_LINKS`). Chaque message laisse une porte de sortie (« je ne vous relancerai pas », « STOP »). Prénom de l'expéditeur et marque : menu ⋯ → Réglages des messages.
 - Import d'un export Apify depuis le navigateur (ingest puis score), export CSV pour Excel avec gérant·e, e-mail, Instagram et LinkedIn.
+
+`npm run crm` utilise la base du `.env` (la production si les variables Turso y sont) ; `npm run crm:local` force la base locale `data/prospection.db`, sur le port 3001, pour tester sans rien écrire en production.
 
 ## Déploiement Vercel
 
