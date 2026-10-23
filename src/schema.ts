@@ -41,7 +41,7 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS activities_by_lead ON activities (place_id, at)`,
   `CREATE TABLE IF NOT EXISTS enrichments (
     place_id               TEXT NOT NULL REFERENCES leads(place_id),
-    stage                  INTEGER NOT NULL,   -- 1 personne (registre), 2 e-mail (FullEnrich), 3 Instagram
+    stage                  INTEGER NOT NULL,   -- cascade : 1 registre, 2 Instagram, 3 LinkedIn, 4 FullEnrich
     source                 TEXT NOT NULL,
     outcome                TEXT NOT NULL,      -- trouve | ambigu | introuvable | erreur
     confidence             TEXT,               -- haute | moyenne
@@ -90,18 +90,42 @@ const STATEMENTS = [
   )`,
 ];
 
-// Colonnes ajoutées après la création de la table : ajoutées à chaud si absentes.
-const ADDED_LEAD_COLUMNS: [name: string, ddl: string][] = [
-  ['crm_status', `TEXT NOT NULL DEFAULT 'A_CONTACTER'`],
-  ['crm_channel', 'TEXT'],
-  ['next_action_at', 'TEXT'], // AAAA-MM-JJ
-  ['crm_updated_at', 'TEXT'],
-];
+// Colonnes ajoutées après la création des tables : ajoutées à chaud si absentes.
+const ADDED_COLUMNS: Record<string, [name: string, ddl: string][]> = {
+  leads: [
+    ['crm_status', `TEXT NOT NULL DEFAULT 'A_CONTACTER'`],
+    ['crm_channel', 'TEXT'],
+    ['next_action_at', 'TEXT'], // AAAA-MM-JJ
+    ['crm_updated_at', 'TEXT'],
+    // Contacts consolidés depuis la cascade d'enrichissement (src/enrich/contacts.ts)
+    ['contact_first_name', 'TEXT'],
+    ['contact_last_name', 'TEXT'],
+    ['contact_role', 'TEXT'],
+    ['email', 'TEXT'],
+    ['email_source', 'TEXT'],
+    ['instagram', 'TEXT'],
+    ['linkedin_url', 'TEXT'],
+    ['contacts_updated_at', 'TEXT'],
+  ],
+  enrichments: [
+    ['email', 'TEXT'],
+    ['email_source', 'TEXT'],
+    ['instagram', 'TEXT'],
+    ['linkedin_url', 'TEXT'],
+    ['contact_phone', 'TEXT'],
+  ],
+  enrich_runs: [
+    ['found_with_email', 'INTEGER'],
+    ['cost', 'TEXT'],
+  ],
+};
 
 export async function migrate(db: Client): Promise<void> {
   await db.batch(STATEMENTS, 'write');
-  const { rows } = await db.execute('PRAGMA table_info(leads)');
-  const present = new Set(rows.map(r => String(r.name)));
-  const missing = ADDED_LEAD_COLUMNS.filter(([name]) => !present.has(name));
-  if (missing.length) await db.batch(missing.map(([name, ddl]) => `ALTER TABLE leads ADD COLUMN ${name} ${ddl}`), 'write');
+  for (const [table, columns] of Object.entries(ADDED_COLUMNS)) {
+    const { rows } = await db.execute(`PRAGMA table_info(${table})`);
+    const present = new Set(rows.map(r => String(r.name)));
+    const missing = columns.filter(([name]) => !present.has(name));
+    if (missing.length) await db.batch(missing.map(([name, ddl]) => `ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`), 'write');
+  }
 }

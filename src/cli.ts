@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { Client } from '@libsql/client';
 import { openDb } from './db.ts';
+import { runCascade } from './enrich/cascade.ts';
 import { runStage1, selectEnriched, selectSample, type LeadResult } from './enrich/stage1.ts';
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
@@ -9,7 +10,36 @@ const USAGE = `Usage :
   npm run ingest -- <export Apify .xlsx|.json> [...]
   npm run score
   npm run enrich -- --sample 20 [--nouveaux]
-  npm run enrich -- --rejouer`;
+  npm run enrich -- --rejouer
+  npm run enrich -- --cascade [--limit N] [--sans-fullenrich]`;
+
+const STAGE_NAMES: Record<number, string> = { 2: 'Instagram', 3: 'LinkedIn', 4: 'FullEnrich' };
+
+// Cascade complète de collecte des contacts sur les leads cibles (ou les N premiers
+// de l'échantillon reproductible). Chaque étape saute les leads qu'elle a déjà traités.
+async function cascade(db: Client, args: string[]) {
+  const i = args.indexOf('--limit');
+  const limit = i >= 0 ? Number(args[i + 1]) : null;
+  if (limit !== null && (!Number.isInteger(limit) || limit <= 0)) throw new Error(USAGE);
+  const leads = limit
+    ? (await selectSample(db, limit)).map(l => l.place_id)
+    : (await db.execute(`SELECT place_id FROM leads WHERE status = 'nouveau'`)).rows.map(r => String(r.place_id));
+  const fullEnrich = !args.includes('--sans-fullenrich');
+  console.log(`Cascade sur ${leads.length} leads${fullEnrich ? '' : ' (sans FullEnrich)'}…`);
+  const r = await runCascade(db, leads, { fullEnrich, mode: `cascade-${leads.length}` });
+  console.log(`  Registre   : ${r.registre} leads nouvellement passés`);
+  for (const s of r.stages) {
+    const name = STAGE_NAMES[s.stage].padEnd(10);
+    console.log(`  ${name} : ${s.leads} leads, ${s.found} trouvés, ${s.withEmail} avec e-mail${s.cost ? ` · coût ${s.cost}` : ''}`);
+  }
+  const { rows } = await db.execute({
+    sql: `SELECT count(*) AS n, count(email) AS email, count(instagram) AS ig, count(linkedin_url) AS li, count(contact_first_name) AS person, count(phone) AS phone
+          FROM leads WHERE place_id IN (${leads.map(() => '?').join(',')})`,
+    args: leads,
+  });
+  const t = rows[0];
+  console.log(`\nSur ces ${t.n} leads : téléphone ${t.phone}, dirigeant nommé ${t.person}, Instagram ${t.ig}, e-mail ${t.email}, LinkedIn ${t.li}.`);
+}
 
 async function ingest(db: Client, files: string[]) {
   if (!files.length) throw new Error(USAGE);
@@ -96,6 +126,7 @@ const db = await openDb();
 try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
+  else if (command === 'enrich' && args.includes('--cascade')) await cascade(db, args);
   else if (command === 'enrich') await enrich(db, args);
   else throw new Error(USAGE);
 } catch (err) {
