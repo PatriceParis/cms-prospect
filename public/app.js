@@ -39,6 +39,7 @@ const state = {
   view: prefs.view ?? 'today',
   filters: { ...DEFAULT_FILTERS, ...prefs.filters },
   sort: prefs.sort ?? { key: 'score', dir: 'desc' },
+  filtersOpen: Boolean(prefs.filtersOpen),
   statuses: {},
   channels: {},
   leads: [],
@@ -69,7 +70,7 @@ function loadPrefs() {
 }
 function savePrefs() {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ view: state.view, filters: state.filters, sort: state.sort }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ view: state.view, filters: state.filters, sort: state.sort, filtersOpen: state.filtersOpen }));
   } catch { /* stockage indisponible : on garde les réglages en mémoire */ }
 }
 
@@ -120,21 +121,36 @@ const contactedToday = l => dayOf(l.last_attempt_at) === today();
 const statusBadge = s => `<span class="badge st-${esc(s)}">${esc(state.statuses[s] ?? s)}</span>`;
 const prioBadge = l => `<span class="prio prio-${esc(l.priority)}" title="Score ${esc(l.score)}/8">${esc(l.priority)}</span>`;
 const deadSite = l => l.site_status === 'mort';
-const channelTags = l =>
-  [
-    ...[l.instagram && 'Instagram', emailUsable(l) && 'E-mail', l.linkedin_url && 'LinkedIn'].filter(Boolean).map(c => `<span class="tag ch">${c}</span>`),
-    deadSite(l) ? `<span class="tag warn" title="Le site indiqué sur sa page Facebook (${esc(l.site_declared)}) ne répond plus">ancien site mort</span>` : '',
-    ...maquetteTags(l),
-  ].filter(Boolean).join(' ');
-
-// Signaux de la maquette : des tags (filtrables), jamais un statut. Seule une demande
+// Une ouverture de maquette est un signal (filtrable), jamais un statut. Seule une demande
 // « Je veux ce site » fait avancer le lead (côté serveur, src/fold.ts).
 const maquetteOpened = l => Number(l.maquette_views) > 0;
-function maquetteTags(l) {
+
+// Signaux, du plus fort au plus faible. Vert : le prospect a réagi. Bleu : opportunité repérée.
+function signals(l) {
   return [
-    maquetteOpened(l) ? `<span class="tag hot" title="Ouverte ${esc(l.maquette_views)} fois, dernière le ${esc(frDate(l.maquette_last_view_at))}">maquette ouverte</span>` : '',
-    Number(l.maquette_requests) > 0 ? `<span class="tag hot" title="Demande reçue depuis la maquette le ${esc(frDate(l.maquette_last_request_at))}">a demandé son site</span>` : '',
-  ];
+    Number(l.maquette_requests) > 0 && { label: 'a demandé son site', cls: 'hot', title: `Demande « Je veux ce site » le ${frDate(l.maquette_last_request_at)}` },
+    maquetteOpened(l) && { label: 'maquette ouverte', cls: 'hot', title: `Ouverte ${l.maquette_views} fois, dernière le ${frDate(l.maquette_last_view_at)}` },
+    deadSite(l) && { label: 'ancien site mort', cls: 'opp', title: `Le site indiqué sur sa page Facebook (${l.site_declared}) ne répond plus` },
+    !l.claimed && { label: 'fiche non revendiquée', cls: 'opp', title: 'Fiche Google non revendiquée : argument d’appel, 2 points de score' },
+  ].filter(Boolean);
+}
+
+function signalTags(l, max = Infinity) {
+  const all = signals(l);
+  const out = all.slice(0, max).map(s => `<span class="tag ${s.cls}" title="${esc(s.title)}">${esc(s.label)}</span>`);
+  const rest = all.slice(max);
+  if (rest.length) out.push(`<span class="tag" title="${esc(rest.map(s => s.label).join(', '))}">+${rest.length}</span>`);
+  return out.join(' ');
+}
+
+// Canaux écrits disponibles, en abrégé : le téléphone s'affiche à côté.
+function channelMinis(l) {
+  return [
+    l.phone_kind === 'mobile' && ['WA', 'WhatsApp (numéro mobile)'],
+    l.instagram && ['IG', `Instagram @${l.instagram}`],
+    emailUsable(l) && ['@', `E-mail ${l.email}`],
+    l.linkedin_url && ['in', 'LinkedIn'],
+  ].filter(Boolean).map(([k, t]) => `<span class="mini" title="${esc(t)}">${k}</span>`).join('');
 }
 
 const maquetteExpired = l => Boolean(l.maquette_expires_at) && new Date(l.maquette_expires_at) < new Date();
@@ -245,7 +261,6 @@ function quickActions(l) {
   if (l.phone) links.push(`<a class="btn sm" href="tel:${esc(l.phone)}">Appeler</a>`);
   if (l.phone_kind === 'mobile') links.push(`<a class="btn sm" href="${esc(whatsappLink(l.phone))}" target="_blank" rel="noopener noreferrer">WhatsApp</a>`);
   if (l.instagram) links.push(`<a class="btn sm" href="https://ig.me/m/${esc(l.instagram)}" target="_blank" rel="noopener noreferrer">DM Instagram</a>`);
-  if (emailUsable(l)) links.push(`<a class="btn sm" href="mailto:${esc(l.email)}">E-mail</a>`);
   return links.join('');
 }
 
@@ -270,16 +285,14 @@ function renderToday(queue) {
   const dueWhy = l =>
     `<span class="${l.next_action_at < today() ? 'overdue' : ''}">Relance ${l.next_action_at < today() ? 'en retard depuis le' : 'prévue le'} ${esc(frDate(l.next_action_at))}</span>` +
     ` · ${statusBadge(l.crm_status)}${l.crm_channel ? ` <span class="sub">via ${esc(state.channels[l.crm_channel] ?? l.crm_channel)}</span>` : ''}`;
-  const freshWhy = l => `Jamais contacté · ${esc(l.reviews_count)} avis, ${esc(l.rating)}★${l.claimed ? '' : ' · <span class="tag warn">fiche non revendiquée</span>'} ${channelTags(l)}`;
+  const freshWhy = l => `${esc(String(l.rating ?? '—').replace('.', ','))}★ · ${esc(l.reviews_count)} avis ${signalTags(l, 2)}`;
 
   state.navIds = [...due, ...fresh].map(l => l.place_id);
   $('#view-today').innerHTML = `
     <div class="today-head">
       <div>
         <h1>Aujourd'hui</h1>
-        <div class="muted">${esc(frLongDate())} · ${due.length} relance${due.length > 1 ? 's' : ''} + ${fresh.length} nouveau${fresh.length > 1 ? 'x' : ''} lead${fresh.length > 1 ? 's' : ''}</div>
-        <p class="sub today-explain">La file du jour propose d’abord les relances dues, puis ${DAILY_NEW} nouveaux leads par jour, par ordre de score (priorité A d’abord).
-        ${remaining} lead${remaining > 1 ? 's' : ''} sur ${state.leads.length} ${remaining > 1 ? 'restent' : 'reste'} à contacter au total · <button type="button" class="linklike" data-goto-all>voir tous les leads</button></p>
+        <div class="muted" title="D’abord les relances dues, puis ${DAILY_NEW} nouveaux leads par jour, par ordre de score">${esc(frLongDate())} · ${due.length} relance${due.length > 1 ? 's' : ''} + ${fresh.length} nouveau${fresh.length > 1 ? 'x' : ''} · ${remaining} à contacter au total · <button type="button" class="linklike" data-goto-all>tous les leads</button></div>
       </div>
       <div class="progress" aria-label="Avancement du jour">
         <div class="sub">${done.length} contacté${done.length > 1 ? 's' : ''} sur ${planned}</div>
@@ -341,10 +354,11 @@ function sorted(rows) {
 
 function renderAll() {
   renderKpis();
+  renderFiltersToggle();
   renderTabs();
   const rows = sorted(state.leads.filter(l => matches(l, state.filters)));
   state.navIds = rows.map(l => l.place_id);
-  $('#count').textContent = `${rows.length} lead${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''} sur ${state.leads.length}`;
+  $('#count').textContent = `${rows.length} sur ${state.leads.length}`;
   renderActiveFilters(rows.length);
   $('#empty').hidden = rows.length > 0;
   $('#empty').textContent = state.leads.length ? 'Aucun lead ne correspond à ces filtres.' : 'Aucun lead pour l’instant : importe un export Apify depuis le menu ⋯.';
@@ -355,18 +369,23 @@ function renderAll() {
   }
 }
 
+// Suivi : la relance prévue d'abord, sinon l'ancienneté de la dernière action.
+function followUp(l) {
+  if (l.next_action_at) return `<span class="${isDue(l) ? 'overdue' : ''}">Relance ${esc(frDate(l.next_action_at))}</span>`;
+  return l.last_activity_at ? `<span class="sub">${esc(relative(l.last_activity_at))}</span>` : '<span class="sub">—</span>';
+}
+
 function rowHtml(l) {
-  const due = isDue(l);
-  const who = [contactName(l), l.google_category].filter(Boolean).map(esc).join(' · ');
+  const meta = [contactName(l), l.google_category, l.city].filter(Boolean).map(esc).join(' · ');
+  const rating = l.rating === null || l.rating === undefined ? '—' : String(l.rating).replace('.', ',');
   return `<tr data-id="${esc(l.place_id)}" class="${l.place_id === state.selectedId ? 'selected' : ''}">
-    <td>${prioBadge(l)}</td>
-    <td><div class="name">${esc(l.name)}</div><div class="sub">${who}${l.claimed ? '' : ' · <span class="tag warn">fiche non revendiquée</span>'}</div>${channelTags(l) ? `<div class="chs">${channelTags(l)}</div>` : ''}</td>
-    <td class="col-city">${esc(l.city)}<div class="sub">${esc(l.postal_code)}</div></td>
-    <td class="col-reviews num">${esc(l.reviews_count)} <span class="sub">· ${esc(l.rating)}★</span></td>
-    <td class="num">${l.phone ? `${esc(phoneDisplay(l.phone))} <span class="tag">${esc(phoneTag(l.phone_kind))}</span>` : '<span class="sub">—</span>'}</td>
-    <td>${statusBadge(l.crm_status)}</td>
-    <td class="num ${due ? 'overdue' : ''}">${esc(frDate(l.next_action_at))}</td>
-    <td class="col-last sub">${esc(relative(l.last_activity_at))}</td>
+    <td class="col-prio">${prioBadge(l)}</td>
+    <td class="col-name"><div class="name">${esc(l.name)}</div><div class="sub one-line">${meta}</div></td>
+    <td class="col-signals">${signalTags(l, 2)}</td>
+    <td class="col-reviews num">${esc(rating)}★ <span class="sub">${esc(l.reviews_count)} avis</span></td>
+    <td class="col-contact num">${l.phone ? esc(phoneDisplay(l.phone)) : '<span class="sub">sans numéro</span>'} <span class="minis">${channelMinis(l)}</span></td>
+    <td class="col-status">${statusBadge(l.crm_status)}</td>
+    <td class="col-follow num">${followUp(l)}</td>
   </tr>`;
 }
 
@@ -377,17 +396,33 @@ function renderKpis() {
   // (demande reçue depuis la maquette) n'en est pas un.
   const touched = all.filter(l => l.first_contact_at);
   const replied = touched.filter(l => ['REP_POSITIVE', 'REP_NEGATIVE', 'NE_PAS_CONTACTER'].includes(l.crm_status));
-  const pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : '—');
-  const kpi = (value, label, hint) => `<div class="kpi" title="${esc(hint)}"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+  const stat = (n, one, many, hint) => `<span class="stat" title="${esc(hint)}"><b>${esc(n)}</b> ${esc(n > 1 ? many : one)}</span>`;
+  const interested = all.filter(l => l.crm_status === 'REP_POSITIVE').length;
   $('#kpis').innerHTML = [
-    kpi(all.length, 'leads au total', 'Tous les leads ciblés, hors fiches écartées à l’import'),
-    kpi(all.filter(l => l.crm_status === 'A_CONTACTER').length, 'à contacter', 'Jamais contactés'),
-    kpi(touched.length, 'déjà contactés', 'Au moins un contact noté'),
-    kpi(pct(replied.length, touched.length), 'taux de réponse', 'Réponses reçues (intéressé, pas intéressé, opposition) rapportées aux leads contactés'),
-    kpi(all.filter(l => l.crm_status === 'REP_POSITIVE').length, 'intéressés', 'Statut RÉP POSITIVE'),
-    kpi(all.filter(l => l.priority === 'A').length, 'en priorité A', 'Score de 7 ou 8 sur 8 : les plus prometteurs'),
+    stat(all.length, 'lead', 'leads', 'Tous les leads ciblés, hors fiches écartées'),
+    stat(all.filter(l => l.crm_status === 'A_CONTACTER').length, 'à contacter', 'à contacter', 'Jamais contactés'),
+    stat(touched.length, 'contacté', 'contactés', 'Au moins un résultat noté avec un canal'),
+    touched.length ? `<span class="stat" title="Intéressé, pas intéressé ou opposition, rapportés aux leads contactés"><b>${Math.round((replied.length / touched.length) * 100)} %</b> de réponses</span>` : '',
+    stat(interested, 'intéressé', 'intéressés', 'Statut RÉP POSITIVE'),
+    stat(all.filter(maquetteOpened).length, 'maquette ouverte', 'maquettes ouvertes', 'Prospects qui ont ouvert leur maquette'),
   ].join('');
 }
+
+// Filtres avancés repliés : le bouton « Filtres » indique combien sont actifs.
+const ADVANCED_FILTERS = ['priority', 'sector', 'phone', 'reach', 'due', 'opened', 'deadsite', 'unclaimed'];
+function renderFiltersToggle() {
+  const n = ADVANCED_FILTERS.filter(k => state.filters[k]).length;
+  $('#filters-count').hidden = !n;
+  $('#filters-count').textContent = n;
+  $('#filters').hidden = !state.filtersOpen;
+  $('#filters-toggle').setAttribute('aria-expanded', String(Boolean(state.filtersOpen)));
+}
+
+$('#filters-toggle').addEventListener('click', () => {
+  state.filtersOpen = !state.filtersOpen;
+  savePrefs();
+  renderFiltersToggle();
+});
 
 const FILTER_LABELS = {
   q: v => `Recherche « ${v} »`,
@@ -409,8 +444,7 @@ function renderActiveFilters(shown) {
   bar.innerHTML = active.length
     ? `<span class="sub">Filtres actifs :</span>
        ${active.map(([k, v]) => `<button type="button" class="chip" data-clear="${esc(k)}" title="Retirer ce filtre">${esc(FILTER_LABELS[k](v))} <span aria-hidden="true">✕</span></button>`).join('')}
-       <button type="button" class="btn ghost sm" data-clear-all>Tout effacer</button>
-       <span class="sub">${shown} lead${shown > 1 ? 's' : ''} affiché${shown > 1 ? 's' : ''} sur ${state.leads.length}</span>`
+       <button type="button" class="btn ghost sm" data-clear-all>Tout effacer</button>`
     : '';
 }
 
@@ -545,14 +579,15 @@ function scriptSection(d) {
     <h3>${title}</h3>
     <div class="seg script-tabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-script-tab="${t.key}" aria-selected="${t.key === tab}">${t.label}</button>`).join('')}</div>
     ${body}
-    <p class="kbd">${tab === 'email' ? 'L’envoi note le contact et la relance à J+3 tout seul.' : 'Après l’envoi, note le résultat ci-dessous (« Contacté, en attente »).'}</p>
+    <p class="kbd">${tab === 'email' ? 'L’envoi note le contact et la relance à J+3 tout seul.' : 'Ensuite, note le résultat dans la barre du bas.'}</p>
   </section>`;
 }
 
 function useChannel(channel) {
   if (!state.channels[channel]) return;
   state.pickChannel = channel;
-  for (const b of document.querySelectorAll('[data-channel]')) b.setAttribute('aria-checked', b.dataset.channel === channel);
+  const select = $('#pick-channel');
+  if (select) select.value = channel;
 }
 
 // Brouillon d'e-mail par lead, gardé pendant la session : l'édition survit aux changements d'onglet.
@@ -603,17 +638,43 @@ function maquetteFact(d) {
   return `<dt>Maquette</dt><dd><a href="${esc(d.maquette_link)}" target="_blank" rel="noopener noreferrer">ouvrir</a> <span class="sub">· ${seen}${until}</span>${asked}</dd>`;
 }
 
+// Canaux pour joindre le prospect. L'e-mail ouvre l'onglet d'envoi de la fiche.
 function reachButtons(d) {
   const out = [];
-  if (d.phone) out.push(`<a class="btn primary" href="tel:${esc(d.phone)}">Appeler ${esc(phoneDisplay(d.phone))}</a>`);
+  if (d.phone) out.push(`<a class="btn primary call" href="tel:${esc(d.phone)}">Appeler ${esc(phoneDisplay(d.phone))}</a>`);
   if (d.phone_kind === 'mobile') out.push(`<a class="btn" href="${esc(whatsappLink(d.phone))}" target="_blank" rel="noopener noreferrer">WhatsApp</a>`);
   if (d.instagram) out.push(`<a class="btn" href="https://ig.me/m/${esc(d.instagram)}" target="_blank" rel="noopener noreferrer">DM Instagram</a>`);
-  if (emailUsable(d)) out.push(`<a class="btn" href="mailto:${esc(d.email)}">E-mail</a>`);
+  if (emailUsable(d)) out.push(`<button type="button" class="btn" data-script-tab="email" data-scroll-script>E-mail</button>`);
   if (d.linkedin_url) out.push(`<a class="btn" href="${esc(d.linkedin_url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`);
-  if (d.maps_url) out.push(`<a class="btn ghost" href="${esc(d.maps_url)}" target="_blank" rel="noopener noreferrer">Fiche Google</a>`);
-  if (d.facebook) out.push(`<a class="btn ghost" href="${esc(d.facebook)}" target="_blank" rel="noopener noreferrer">Page Facebook</a>`);
-  if (d.maquette_link && !maquetteExpired(d)) out.push(`<a class="btn ghost" href="${esc(d.maquette_link)}" target="_blank" rel="noopener noreferrer">Voir sa maquette</a>`);
   return out.join('');
+}
+
+// Liens de consultation (pas des canaux) : en texte, sous l'en-tête.
+function refLinks(d) {
+  const link = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`;
+  return [
+    d.maps_url && link(d.maps_url, 'Fiche Google'),
+    d.maquette_link && !maquetteExpired(d) && link(d.maquette_link, 'Sa maquette'),
+    d.instagram && link(`https://www.instagram.com/${d.instagram}/`, 'Instagram'),
+    d.facebook && link(d.facebook, 'Facebook'),
+  ].filter(Boolean).join('<span class="dot" aria-hidden="true">·</span>');
+}
+
+// Barre du bas, toujours visible : canal, note et résultat en un clic.
+function actionBar(d, locked, doneToday) {
+  const channels = Object.entries(state.channels).map(([k, v]) => `<option value="${esc(k)}" ${state.pickChannel === k ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  return `<footer class="p-actions" aria-label="Noter le résultat">
+    <div class="p-actions-row">
+      ${locked ? '' : `<select id="pick-channel" aria-label="Canal utilisé">${channels}</select>`}
+      <textarea id="note" rows="1" maxlength="2000" placeholder="Note : ce qui s’est dit, l’objection, quand rappeler…"></textarea>
+    </div>
+    ${locked
+      ? '<button type="button" class="btn block" data-note-only>Ajouter la note</button>'
+      : `<div class="outcomes">
+          ${OUTCOMES.map(o => `<button type="button" class="outcome ${o.tone ?? ''}" data-outcome="${o.key}" title="${esc(o.hint)}" ${o.outbound && doneToday ? 'disabled' : ''}><b>${esc(o.label)}</b><span>${esc(o.hint)}</span></button>`).join('')}
+          <button type="button" class="outcome quiet" data-note-only title="Sans changer le statut"><b>Note seule</b><span>Sans changer le statut</span></button>
+        </div>`}
+  </footer>`;
 }
 
 function renderPanel() {
@@ -642,36 +703,17 @@ function renderPanel() {
       <div class="p-status">
         ${statusBadge(d.crm_status)}
         ${d.next_action_at ? `<span class="sub ${isDue(d) ? 'overdue' : ''}">Relance le ${esc(frDate(d.next_action_at))}</span>` : ''}
-        ${d.claimed ? '' : '<span class="tag warn">fiche non revendiquée</span>'}
-        ${deadSite(d) ? '<span class="tag warn">ancien site mort</span>' : ''}
+        ${signalTags(d)}
       </div>
+      ${refLinks(d) ? `<div class="p-links">${refLinks(d)}</div>` : ''}
       ${scoreDetail(d)}
       ${locked ? '<p class="notice stop">Opposition enregistrée : ne plus contacter ce lead, sur aucun canal.</p>' : ''}
       ${!locked && doneToday ? '<p class="notice">Déjà contacté aujourd’hui : prochain contact demain au plus tôt. Une réponse reçue peut toujours être notée.</p>' : ''}
-      ${!locked && d.phone_kind === 'mobile' ? '<p class="notice">Numéro mobile : vérifie en début d’appel qu’il s’agit bien de la ligne du salon.</p>' : ''}
+      ${!locked && d.phone_kind === 'mobile' ? '<p class="notice soft">Numéro mobile : vérifie en début d’appel qu’il s’agit bien de la ligne du salon.</p>' : ''}
 
-      ${locked ? '' : `<section class="p-section"><h3>Joindre</h3><div class="reach">${reachButtons(d) || '<span class="muted">Aucun canal connu.</span>'}</div></section>`}
+      ${locked ? '' : `<div class="reach">${reachButtons(d) || '<span class="muted">Aucun canal connu.</span>'}</div>`}
 
       ${locked ? '' : scriptSection(d)}
-
-      <section class="p-section">
-        <h3>Noter le résultat</h3>
-        ${locked ? '' : `<div class="seg" role="radiogroup" aria-label="Canal utilisé">
-          ${Object.entries(state.channels).map(([k, v]) => `<button type="button" role="radio" data-channel="${esc(k)}" aria-checked="${state.pickChannel === k}">${esc(v)}</button>`).join('')}
-        </div>`}
-        <textarea id="note" rows="2" maxlength="2000" placeholder="Note (facultative) : ce qui s’est dit, l’objection, le meilleur moment pour rappeler…"></textarea>
-        ${locked ? '<div class="more-grid"><button type="button" class="btn" data-note-only>Ajouter la note</button></div>' : `<div class="outcomes">
-          ${OUTCOMES.map(o => `<button type="button" class="outcome ${o.tone ?? ''}" data-outcome="${o.key}" ${o.outbound && doneToday ? 'disabled' : ''}><b>${esc(o.label)}</b><span>${esc(o.hint)}</span></button>`).join('')}
-          <button type="button" class="outcome" data-note-only><b>Note seule</b><span>Sans changer le statut</span></button>
-        </div>
-        <details class="more"><summary>Autre mise à jour (statut ou date au choix)</summary>
-          <div class="more-grid">
-            <label class="field">Statut<select id="more-status">${STATUS_ORDER.map(s => `<option value="${s}" ${s === d.crm_status ? 'selected' : ''}>${esc(state.statuses[s])}</option>`).join('')}</select></label>
-            <label class="field">Relance le<input type="date" id="more-date" value="${esc(d.next_action_at ?? '')}"></label>
-            <button type="button" class="btn" data-more-save>Enregistrer</button>
-          </div>
-        </details>`}
-      </section>
 
       <section class="p-section">
         <h3>Fiche</h3>
@@ -692,9 +734,17 @@ function renderPanel() {
       <section class="p-section">
         <h3>Historique</h3>
         ${d.activities.length ? `<ol class="timeline">${d.activities.map(activityHtml).join('')}</ol>` : '<p class="muted">Aucune action pour l’instant.</p>'}
+        ${locked ? '' : `<details class="more"><summary>Corriger le statut ou la date de relance</summary>
+          <div class="more-grid">
+            <label class="field">Statut<select id="more-status">${STATUS_ORDER.map(s => `<option value="${s}" ${s === d.crm_status ? 'selected' : ''}>${esc(state.statuses[s])}</option>`).join('')}</select></label>
+            <label class="field">Relance le<input type="date" id="more-date" value="${esc(d.next_action_at ?? '')}"></label>
+            <button type="button" class="btn" data-more-save>Enregistrer</button>
+          </div>
+        </details>`}
       </section>
       <p class="kbd">Raccourcis : ↑ ↓ lead précédent / suivant · Échap fermer</p>
     </div>
+    ${actionBar(d, locked, doneToday)}
   `;
 }
 
@@ -779,7 +829,9 @@ $('#panel').addEventListener('click', async e => {
   if (t.dataset.settings !== undefined) return openSettings();
   if (t.dataset.scriptTab) {
     state.scriptTab = t.dataset.scriptTab;
-    return renderPanel();
+    renderPanel();
+    if (t.dataset.scrollScript !== undefined) $('#panel .script-tabs')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return;
   }
   if (t.dataset.copy) {
     const copied = await copyScript(t.dataset.copy);
@@ -807,11 +859,6 @@ $('#panel').addEventListener('click', async e => {
   const note = $('#note')?.value.trim() ?? '';
   if (t.dataset.action === 'close') return closePanel();
   if (t.dataset.nav) return step(Number(t.dataset.nav));
-  if (t.dataset.channel) {
-    state.pickChannel = t.dataset.channel;
-    for (const b of document.querySelectorAll('[data-channel]')) b.setAttribute('aria-checked', b.dataset.channel === state.pickChannel);
-    return;
-  }
   if (t.dataset.outcome) {
     const o = OUTCOMES.find(x => x.key === t.dataset.outcome);
     if (o.status === 'NE_PAS_CONTACTER' && !confirm('Opposition définitive : ce lead ne pourra plus être recontacté, sur aucun canal. Confirmer ?')) return;
@@ -839,6 +886,9 @@ $('#panel').addEventListener('click', async e => {
 $('#panel').addEventListener('input', e => {
   const field = e.target.dataset?.emailField;
   if (field && state.detail) emailDraft(state.detail)[field] = e.target.value;
+});
+$('#panel').addEventListener('change', e => {
+  if (e.target.id === 'pick-channel') state.pickChannel = e.target.value;
 });
 
 $('#scrim').addEventListener('click', closePanel);

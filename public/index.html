@@ -44,54 +44,65 @@
     <main id="view-today" class="view" hidden></main>
 
     <main id="view-all" class="view" hidden>
-      <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
-      <p class="legend">
-        <strong>Priorité</strong> : <span class="prio prio-A">A</span> score de 7 ou 8 sur 8, les plus prometteurs · <span class="prio prio-B">B</span> 5 ou 6 · <span class="prio prio-C">C</span> 4 ou moins.
-        Le score additionne le nombre d’avis (1 à 3 points), une note de 4,5 ou plus (1), une fiche Google non revendiquée (2), un téléphone (1) et au moins 10 photos (1).
-        Les indicateurs ci-dessus portent sur tous les leads, quels que soient les filtres.
-      </p>
-      <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
+      <div class="list-head">
+        <h1>Tous les leads</h1>
+        <div class="stats" id="kpis" aria-label="Indicateurs sur tous les leads"></div>
+      </div>
       <section class="toolbar">
         <input id="f-q" type="search" placeholder="Rechercher un salon, une gérante, une ville, un numéro…" aria-label="Recherche">
-        <select id="f-priority" aria-label="Priorité">
-          <option value="">Toutes priorités</option>
-          <option value="A">Priorité A</option>
-          <option value="B">Priorité B</option>
-          <option value="C">Priorité C</option>
-        </select>
-        <select id="f-sector" aria-label="Secteur"><option value="">Tous secteurs</option></select>
-        <select id="f-phone" aria-label="Téléphone">
-          <option value="">Tous téléphones</option>
-          <option value="fixe">Fixe</option>
-          <option value="mobile">Mobile</option>
-          <option value="voip">Box (09)</option>
-          <option value="aucun">Sans numéro</option>
-        </select>
-        <select id="f-reach" aria-label="Canal disponible">
-          <option value="">Tous canaux</option>
-          <option value="instagram">Avec Instagram</option>
-          <option value="email">Avec e-mail</option>
-          <option value="linkedin">Avec LinkedIn</option>
-        </select>
-        <label class="check"><input id="f-unclaimed" type="checkbox"> Fiche non revendiquée</label>
-        <label class="check" title="Le site indiqué sur la page Facebook du salon ne répond plus"><input id="f-deadsite" type="checkbox"> Ancien site mort</label>
-        <label class="check" title="Le prospect a ouvert au moins une fois sa maquette"><input id="f-opened" type="checkbox"> Maquette ouverte</label>
-        <label class="check"><input id="f-due" type="checkbox"> À relancer</label>
+        <button type="button" class="btn" id="filters-toggle" aria-expanded="false" aria-controls="filters">Filtres <span class="pill" id="filters-count" hidden></span></button>
         <span class="count" id="count"></span>
       </section>
+      <section class="filters" id="filters" hidden>
+        <div class="filter-grid">
+          <label class="field sm">Priorité
+            <select id="f-priority">
+              <option value="">Toutes</option>
+              <option value="A">A · 7 ou 8 sur 8</option>
+              <option value="B">B · 5 ou 6</option>
+              <option value="C">C · 4 ou moins</option>
+            </select>
+          </label>
+          <label class="field sm">Secteur <select id="f-sector"><option value="">Tous</option></select></label>
+          <label class="field sm">Téléphone
+            <select id="f-phone">
+              <option value="">Tous</option>
+              <option value="fixe">Fixe</option>
+              <option value="mobile">Mobile</option>
+              <option value="voip">Box (09)</option>
+              <option value="aucun">Sans numéro</option>
+            </select>
+          </label>
+          <label class="field sm">Canal écrit
+            <select id="f-reach">
+              <option value="">Tous</option>
+              <option value="instagram">Avec Instagram</option>
+              <option value="email">Avec e-mail</option>
+              <option value="linkedin">Avec LinkedIn</option>
+            </select>
+          </label>
+        </div>
+        <div class="filter-checks">
+          <label class="check"><input id="f-due" type="checkbox"> À relancer</label>
+          <label class="check" title="Le prospect a ouvert au moins une fois sa maquette"><input id="f-opened" type="checkbox"> Maquette ouverte</label>
+          <label class="check" title="Le site indiqué sur la page Facebook du salon ne répond plus"><input id="f-deadsite" type="checkbox"> Ancien site mort</label>
+          <label class="check"><input id="f-unclaimed" type="checkbox"> Fiche non revendiquée</label>
+        </div>
+        <p class="sub legend">Priorité : le score additionne le nombre d’avis (1 à 3 points), une note de 4,5 ou plus (1), une fiche Google non revendiquée (2), un téléphone (1) et au moins 10 photos (1). A = 7 ou 8 sur 8, B = 5 ou 6, C = 4 ou moins.</p>
+      </section>
+      <nav class="status-tabs" id="status-tabs" aria-label="Filtrer par statut"></nav>
       <div class="active-filters" id="active-filters" hidden></div>
       <div class="table-wrap">
         <table class="leads">
           <thead>
             <tr>
-              <th><button type="button" data-sort="score" title="Priorité : A = score de 7 ou 8 sur 8, B = 5 ou 6, C = 4 ou moins">Prio</button></th>
+              <th class="col-prio"><button type="button" data-sort="score" title="Priorité : A = score de 7 ou 8 sur 8, B = 5 ou 6, C = 4 ou moins">Prio</button></th>
               <th><button type="button" data-sort="name">Établissement</button></th>
-              <th class="col-city"><button type="button" data-sort="city">Ville</button></th>
+              <th class="col-signals">Signaux</th>
               <th class="col-reviews"><button type="button" data-sort="reviews_count">Avis</button></th>
-              <th>Téléphone</th>
-              <th><button type="button" data-sort="crm_status">Statut</button></th>
-              <th><button type="button" data-sort="next_action_at">Relance</button></th>
-              <th class="col-last"><button type="button" data-sort="last_activity_at">Dernière action</button></th>
+              <th class="col-contact">Contact</th>
+              <th class="col-status"><button type="button" data-sort="crm_status">Statut</button></th>
+              <th class="col-follow"><button type="button" data-sort="next_action_at">Suivi</button></th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
