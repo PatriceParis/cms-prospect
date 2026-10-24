@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename } from 'node:path';
 import type { Client } from '@libsql/client';
 import { CHANNELS, CRM_STATUSES, CrmError, exportCsv, getLead, listLeads, updateLead } from '../crm.ts';
+import { foldConfigured, handleFoldEvent, signatureHeader, syncMaquettes, verifySignature } from '../fold.ts';
 import { ingestBuffer } from '../ingest.ts';
 import { scoreLeads } from '../score.ts';
 import { checkPassword, clearedCookie, createSession, readCookie, sessionCookie, verifySession } from './auth.ts';
@@ -59,6 +60,21 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 const meta = { statuses: CRM_STATUSES, channels: CHANNELS };
 
+// Vues et demandes des maquettes : relues dans l'API au plus toutes les 5 minutes, à
+// l'ouverture de la liste (les notifications, si configurées, arrivent en direct).
+const SYNC_EVERY_MS = 5 * 60_000;
+let lastFoldSync = 0;
+
+async function refreshMaquettes(db: Client) {
+  if (!foldConfigured() || Date.now() - lastFoldSync < SYNC_EVERY_MS) return;
+  lastFoldSync = Date.now();
+  try {
+    await syncMaquettes(db, { timeoutMs: 4000 });
+  } catch (err) {
+    console.error('synchronisation des maquettes', err);
+  }
+}
+
 export function createHandler(deps: HandlerDeps) {
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -86,7 +102,26 @@ export function createHandler(deps: HandlerDeps) {
         // visent la même base Turso sans jamais exposer l'adresse elle-même.
         const url = process.env.TURSO_DATABASE_URL;
         const databaseFingerprint = url ? createHash('sha256').update(url).digest('hex').slice(0, 8) : null;
-        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, database, databaseFingerprint });
+        const maquettes = { FOLD_API_KEY: foldConfigured(), FOLD_WEBHOOK_SECRET: Boolean(process.env.FOLD_WEBHOOK_SECRET) };
+        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, database, databaseFingerprint });
+      }
+
+      // Notifications de l'outil de maquettes : publiques, authentifiées par leur signature
+      // HMAC calculée sur le corps brut. Réponse rapide ; un échec n'est pas renvoyé, la
+      // synchronisation (GET /maquettes?since=…) rattrape.
+      if (path === '/api/fold/webhook' && method === 'POST') {
+        const secret = process.env.FOLD_WEBHOOK_SECRET;
+        if (!secret) throw new CrmError("FOLD_WEBHOOK_SECRET n'est pas défini.", 503);
+        const raw = await readBody(req, JSON_LIMIT);
+        if (!verifySignature(raw, signatureHeader(req.headers), secret)) throw new CrmError('Signature invalide', 401);
+        let event: unknown;
+        try {
+          event = JSON.parse(raw.toString('utf8'));
+        } catch {
+          throw new CrmError('JSON invalide');
+        }
+        if (!event || typeof event !== 'object') throw new CrmError('JSON invalide');
+        return send(res, 200, { ok: true, handled: await handleFoldEvent(await deps.getDb(), event as Record<string, unknown>) });
       }
 
       if (!password) throw new CrmError("CRM_PASSWORD n'est pas défini : l'accès est fermé.", 503);
@@ -107,7 +142,11 @@ export function createHandler(deps: HandlerDeps) {
 
       if (path === '/api/me' && method === 'GET') return send(res, 200, meta);
 
-      if (path === '/api/leads' && method === 'GET') return send(res, 200, { leads: await listLeads(await deps.getDb()) });
+      if (path === '/api/leads' && method === 'GET') {
+        const db = await deps.getDb();
+        await refreshMaquettes(db);
+        return send(res, 200, { leads: await listLeads(db) });
+      }
 
       const leadMatch = /^\/api\/leads\/([^/]+)$/.exec(path);
       if (leadMatch) {

@@ -8,6 +8,7 @@ import { migrate } from './schema.ts';
 import { runStage1, selectEnriched, selectSample, type LeadResult } from './enrich/stage1.ts';
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
+import { generateMaquettes, syncMaquettes, type GenerateReport } from './fold.ts';
 
 const USAGE = `Usage :
   npm run ingest -- <export Apify .xlsx|.json> [...]
@@ -16,7 +17,37 @@ const USAGE = `Usage :
   npm run enrich -- --rejouer
   npm run enrich -- --cascade [--limit N] [--sans-fullenrich]
   npm run sync -- <base source, ex. file:data/prospection.db>
+  npm run maquettes -- [--limit N]          crée la maquette des leads qui n'en ont pas
+  npm run maquettes -- --sync [--complet]   relit liens, vues et demandes depuis l'outil
 Ajouter --local pour viser data/prospection.db même si TURSO_DATABASE_URL est défini.`;
+
+// Maquettes de site (API Fold) : création des manquantes, ou simple synchronisation.
+async function maquettes(db: Client, args: string[]) {
+  if (args.includes('--sync')) {
+    const r = await syncMaquettes(db, { full: args.includes('--complet') });
+    console.log(`Synchronisation : ${r.items} maquettes reçues, ${r.recorded} rattachées à un lead.`);
+  } else {
+    const i = args.indexOf('--limit');
+    const limit = i >= 0 ? Number(args[i + 1]) : undefined;
+    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) throw new Error(USAGE);
+    let done = 0;
+    const show = (r: GenerateReport) => {
+      console.log(`\n${r.created} créées, ${r.existing} existaient déjà, ${r.errors.length} erreurs${r.notTried ? `, ${r.notTried} non tentées` : ''}.`);
+      for (const e of r.errors) console.log(`  ✗ ${e.name} — ${e.error}`);
+    };
+    try {
+      show(await generateMaquettes(db, { limit, onDone: (name, outcome) => console.log(`  ${String(++done).padStart(3)}. ${name} : ${outcome}`) }));
+    } catch (err) {
+      const report = (err as { report?: GenerateReport }).report;
+      if (report) show(report);
+      throw err;
+    }
+  }
+  const { rows } = await db.execute(`SELECT count(*) AS n, count(m.link) AS links, coalesce(sum(m.views > 0), 0) AS seen, coalesce(sum(m.requests > 0), 0) AS asked
+    FROM leads l LEFT JOIN maquettes m ON m.place_id = l.place_id WHERE l.status = 'nouveau'`);
+  const t = rows[0];
+  console.log(`Leads : ${t.n} · avec lien de maquette ${t.links} · maquettes vues ${t.seen} · demandes ${t.asked}.`);
+}
 
 // Copie les enrichissements d'une base source vers la base courante (Turso si configurée).
 async function sync(db: Client, args: string[]) {
@@ -152,6 +183,7 @@ try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
   else if (command === 'sync') await sync(db, args);
+  else if (command === 'maquettes') await maquettes(db, args);
   else if (command === 'enrich' && args.includes('--cascade')) await cascade(db, args);
   else if (command === 'enrich') await enrich(db, args);
   else throw new Error(USAGE);

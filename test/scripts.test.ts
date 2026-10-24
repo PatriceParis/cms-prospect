@@ -81,6 +81,18 @@ describe('scripts', () => {
     assert.doesNotMatch(allTexts(s), /undefined|null|\{|\}|\[|\]/);
   });
 
+  it('maquette du prospect : présentée comme son site, jamais comme un exemple ; exemple du secteur si expirée', () => {
+    const own = { ...lead, maquette_link: 'https://apercu.example/abc123', maquette_expires_at: '2026-11-20T00:00:00Z' };
+    const s = buildScripts(own, settings, { now: friday });
+    assert.equal(s.link, 'https://apercu.example/abc123');
+    assert.match(s.instagram, /J’ai préparé un aperçu de votre site à partir de votre fiche Google : https:\/\/apercu\.example\/abc123/);
+    assert.match(s.call.steps[3].text, /J’ai déjà préparé un aperçu de votre site/);
+    assert.doesNotMatch(allTexts(s), /exemple de site/);
+    const expired = buildScripts({ ...own, maquette_expires_at: '2026-10-01T00:00:00Z' }, settings, { now: friday });
+    assert.equal(expired.link, previewUrl(lead));
+    assert.match(expired.instagram, /Voici un exemple de site/);
+  });
+
   it('un lead déjà contacté reçoit les relances', () => {
     const s = buildScripts({ ...lead, crm_status: 'PAS_DE_REP' }, settings);
     assert.equal(s.followUp, true);

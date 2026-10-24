@@ -11,6 +11,7 @@
     "score": "node --disable-warning=ExperimentalWarning src/cli.ts score",
     "enrich": "node --disable-warning=ExperimentalWarning src/cli.ts enrich",
     "sync": "node --disable-warning=ExperimentalWarning src/cli.ts sync",
+    "maquettes": "node --disable-warning=ExperimentalWarning src/cli.ts maquettes",
     "crm": "node --disable-warning=ExperimentalWarning src/web/dev.ts",
     "crm:local": "node --disable-warning=ExperimentalWarning src/web/dev.ts --local --port 3001",
     "build": "node scripts/build-vercel.mjs",

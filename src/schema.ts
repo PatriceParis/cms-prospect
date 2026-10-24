@@ -32,7 +32,7 @@ const STATEMENTS = [
     place_id    TEXT NOT NULL REFERENCES leads(place_id),
     at          TEXT NOT NULL,
     author      TEXT NOT NULL,
-    kind        TEXT NOT NULL,        -- statut | note | relance
+    kind        TEXT NOT NULL,        -- statut | note | relance | demande (maquette)
     from_status TEXT,
     to_status   TEXT,
     channel     TEXT,
@@ -84,6 +84,25 @@ const STATEMENTS = [
     detail     TEXT,
     checked_at TEXT NOT NULL,
     PRIMARY KEY (kind, target)
+  )`,
+  // Maquette de site par prospect, créée et suivie par l'API Fold (src/fold.ts).
+  `CREATE TABLE IF NOT EXISTS maquettes (
+    place_id        TEXT PRIMARY KEY REFERENCES leads(place_id),
+    status          TEXT NOT NULL,                -- creating | active | … (outil) ; erreur côté CRM
+    link            TEXT,                         -- toujours lu dans la réponse, jamais construit
+    expires_at      TEXT,
+    views           INTEGER,
+    first_view_at   TEXT,
+    last_view_at    TEXT,
+    requests        INTEGER,                      -- demandes « Je veux ce site »
+    last_request_at TEXT,
+    created_at      TEXT,
+    error           TEXT,
+    synced_at       TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS app_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS ingest_runs (
     id            INTEGER PRIMARY KEY,

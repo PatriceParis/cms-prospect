@@ -124,7 +124,17 @@ const channelTags = l =>
   [
     ...[l.instagram && 'Instagram', emailUsable(l) && 'E-mail', l.linkedin_url && 'LinkedIn'].filter(Boolean).map(c => `<span class="tag ch">${c}</span>`),
     deadSite(l) ? `<span class="tag warn" title="Le site indiqué sur sa page Facebook (${esc(l.site_declared)}) ne répond plus">ancien site mort</span>` : '',
+    maquetteTag(l),
   ].filter(Boolean).join(' ');
+
+// Signaux de la maquette : une demande « Je veux ce site » prime sur les vues.
+function maquetteTag(l) {
+  if (Number(l.maquette_requests) > 0) return `<span class="tag hot" title="Demande reçue depuis la maquette le ${esc(frDate(l.maquette_last_request_at))}">a demandé son site</span>`;
+  if (Number(l.maquette_views) > 0) return `<span class="tag hot" title="Dernière vue le ${esc(frDate(l.maquette_last_view_at))}">maquette vue ×${esc(l.maquette_views)}</span>`;
+  return '';
+}
+
+const maquetteExpired = l => Boolean(l.maquette_expires_at) && new Date(l.maquette_expires_at) < new Date();
 
 function toast(message, { error = false } = {}) {
   const el = document.createElement('div');
@@ -561,6 +571,18 @@ function step(delta) {
   if (next) openLead(next);
 }
 
+function maquetteFact(d) {
+  if (!d.maquette_link) return d.maquette_status === 'erreur' ? '<dt>Maquette</dt><dd class="sub">création en échec, à relancer</dd>' : '';
+  const views = Number(d.maquette_views) || 0;
+  const requests = Number(d.maquette_requests) || 0;
+  const seen = views ? `vue ${views} fois, dernière le ${esc(frDate(d.maquette_last_view_at))}` : 'pas encore vue';
+  const asked = requests ? ` · <span class="tag hot">${requests} demande${requests > 1 ? 's' : ''} « Je veux ce site »</span>` : '';
+  const until = d.maquette_expires_at
+    ? maquetteExpired(d) ? ' · <span class="tag warn">expirée : à prolonger</span>' : ` · valable jusqu’au ${esc(frDate(d.maquette_expires_at))}`
+    : '';
+  return `<dt>Maquette</dt><dd><a href="${esc(d.maquette_link)}" target="_blank" rel="noopener noreferrer">ouvrir</a> <span class="sub">· ${seen}${until}</span>${asked}</dd>`;
+}
+
 function reachButtons(d) {
   const out = [];
   if (d.phone) out.push(`<a class="btn primary" href="tel:${esc(d.phone)}">Appeler ${esc(phoneDisplay(d.phone))}</a>`);
@@ -570,6 +592,7 @@ function reachButtons(d) {
   if (d.linkedin_url) out.push(`<a class="btn" href="${esc(d.linkedin_url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`);
   if (d.maps_url) out.push(`<a class="btn ghost" href="${esc(d.maps_url)}" target="_blank" rel="noopener noreferrer">Fiche Google</a>`);
   if (d.facebook) out.push(`<a class="btn ghost" href="${esc(d.facebook)}" target="_blank" rel="noopener noreferrer">Page Facebook</a>`);
+  if (d.maquette_link && !maquetteExpired(d)) out.push(`<a class="btn ghost" href="${esc(d.maquette_link)}" target="_blank" rel="noopener noreferrer">Voir sa maquette</a>`);
   return out.join('');
 }
 
@@ -639,6 +662,7 @@ function renderPanel() {
           ${d.email ? `<dt>E-mail</dt><dd>${emailUsable(d) ? esc(d.email) : `<s>${esc(d.email)}</s> <span class="tag warn">${esc(EMAIL_BOUNCE[d.email_check])}</span>`} <span class="sub">· ${esc(EMAIL_SOURCES[d.email_source] ?? d.email_source ?? '')}</span></dd>` : ''}
           ${d.facebook ? `<dt>Facebook</dt><dd><a href="${esc(d.facebook)}" target="_blank" rel="noopener noreferrer">${esc(d.facebook.replace(/^https:\/\/www\.facebook\.com\//, '').replace(/\/$/, ''))}</a> <span class="sub">· même téléphone que la fiche</span></dd>` : ''}
           ${d.site_declared ? `<dt>Site indiqué</dt><dd>${esc(d.site_declared)} ${deadSite(d) ? '<span class="tag warn">ne répond plus</span>' : d.site_status === 'repond' ? '<span class="sub">· répond encore : vérifie qu’il s’agit bien du site du salon</span>' : ''} <span class="sub">· sur sa page Facebook</span></dd>` : ''}
+          ${maquetteFact(d)}
           <dt>Adresse</dt><dd>${esc(d.address)}, ${esc(d.postal_code)} ${esc(d.city)}</dd>
           <dt>Google</dt><dd>${esc(d.reviews_count)} avis · ${esc(d.rating)}★ · ${esc(d.photos_count)} photos</dd>
           ${d.opening_hours ? `<dt>Horaires</dt><dd class="sub">${esc(d.opening_hours)}</dd>` : ''}
@@ -680,6 +704,8 @@ function activityHtml(a) {
     what = a.from_status === a.to_status ? `${statusBadge(a.to_status)} nouvelle tentative${channel}` : `${statusBadge(a.from_status)} → ${statusBadge(a.to_status)}${channel}`;
   } else if (a.kind === 'relance') {
     what = a.body ? `Relance prévue le ${esc(frDate(a.body))}` : 'Relance retirée';
+  } else if (a.kind === 'demande') {
+    what = '<span class="tag hot">Demande depuis la maquette</span>';
   } else {
     what = 'Note';
   }

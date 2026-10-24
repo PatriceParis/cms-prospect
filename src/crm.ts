@@ -51,7 +51,10 @@ const LIST_COLUMNS = `
   l.address, l.postal_code, l.city, l.photos_count, l.claimed, l.maps_url, l.score, l.priority,
   l.crm_status, l.crm_channel, l.next_action_at, l.crm_updated_at,
   l.contact_first_name, l.contact_last_name, l.contact_role, l.email, l.email_source, l.email_check, l.instagram, l.linkedin_url,
-  l.facebook, l.site_declared, l.site_status`;
+  l.facebook, l.site_declared, l.site_status,
+  m.link AS maquette_link, m.status AS maquette_status, m.expires_at AS maquette_expires_at, m.views AS maquette_views,
+  m.last_view_at AS maquette_last_view_at, m.requests AS maquette_requests, m.last_request_at AS maquette_last_request_at`;
+const FROM_LEADS = `leads l LEFT JOIN maquettes m ON m.place_id = l.place_id`;
 
 // Tentative de contact sortante : un statut CONTACTÉ ou PAS DE RÉP enregistré avec un canal.
 const OUTBOUND = `a.kind = 'statut' AND a.to_status IN ('CONTACTE', 'PAS_DE_REP') AND a.channel IS NOT NULL`;
@@ -62,7 +65,7 @@ export async function listLeads(db: Client) {
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id) AS last_activity_at,
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS last_attempt_at,
       (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS first_attempt_at
-    FROM leads l WHERE l.status <> 'hors_cible'
+    FROM ${FROM_LEADS} WHERE l.status <> 'hors_cible'
     ORDER BY l.score DESC, l.reviews_count DESC`);
   return rows.map(plain);
 }
@@ -73,7 +76,7 @@ export const parisDay = (d: Date) => PARIS_DAY.format(d);
 
 export async function getLead(db: Client, placeId: string): Promise<LeadFields & { activities: LeadFields[] }> {
   const lead = await db.execute({
-    sql: `SELECT ${LIST_COLUMNS}, l.opening_hours, l.neighborhood, l.first_seen_at FROM leads l WHERE l.place_id = ? AND l.status <> 'hors_cible'`,
+    sql: `SELECT ${LIST_COLUMNS}, l.opening_hours, l.neighborhood, l.first_seen_at FROM ${FROM_LEADS} WHERE l.place_id = ? AND l.status <> 'hors_cible'`,
     args: [placeId],
   });
   if (!lead.rows.length) throw new CrmError('Lead introuvable', 404);
@@ -184,6 +187,10 @@ const CSV_COLUMNS: [label: string, key: string][] = [
   ['LinkedIn', 'linkedin_url'],
   ['Site indiqué sur Facebook', 'site_declared'],
   ['État de ce site', 'site_status_label'],
+  ['Maquette', 'maquette_link'],
+  ['Maquette vue (fois)', 'maquette_views'],
+  ['Demandes « Je veux ce site »', 'maquette_requests'],
+  ['Maquette valable jusqu’au', 'maquette_expires_at'],
   ['Dernier canal', 'crm_channel'],
   ['Relance le', 'next_action_at'],
   ['Téléphone', 'phone'],

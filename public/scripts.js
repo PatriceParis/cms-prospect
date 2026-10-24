@@ -2,8 +2,8 @@
 // testé côté Node. Modifier un texte ici est une décision commerciale : elle passe par
 // un commit.
 
-// Exemple de site vitrine par secteur. Tant que le back-office ne lit pas de paramètres,
-// la page montre un salon fictif : les messages la présentent donc comme un exemple.
+// Exemple de site vitrine par secteur, montré quand le prospect n'a pas encore sa propre
+// maquette (API Fold) : la page montre un salon fictif, présentée comme un exemple.
 export const PREVIEW_LINKS = {
   Coiffeur: 'https://test.fold-medias.com/admin/clients/45/preview/',
 };
@@ -60,8 +60,12 @@ function addBusinessDays(n, from) {
 }
 const weekday = d => d.toLocaleDateString('fr-FR', { weekday: 'long' });
 
-export function previewUrl(lead) {
-  return PREVIEW_LINKS[lead.search_sector] ?? null;
+// Maquette du prospect tant qu'elle est valable (30 jours, prolongeable), sinon l'exemple du secteur.
+export const ownPreview = (lead, now = new Date()) =>
+  Boolean(lead.maquette_link) && !(lead.maquette_expires_at && new Date(lead.maquette_expires_at) < now);
+
+export function previewUrl(lead, now = new Date()) {
+  return ownPreview(lead, now) ? lead.maquette_link : (PREVIEW_LINKS[lead.search_sector] ?? null);
 }
 
 export function missingSettings(settings) {
@@ -85,7 +89,8 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
   const city = lead.city || 'Bordeaux';
   const hello = first ? `Bonjour ${first}` : 'Bonjour';
   const hook = reviewsHook(lead);
-  const link = previewUrl(lead);
+  const link = previewUrl(lead, now);
+  const own = ownPreview(lead, now); // maquette préparée pour ce prospect, pas un exemple
   const unclaimed = !lead.claimed;
   const callBack = weekday(addBusinessDays(2, now));
   const followUp = isFollowUp(lead);
@@ -120,9 +125,13 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
         title: 'Proposition',
         text: !link
           ? `Je peux vous préparer un aperçu de votre site à partir de votre fiche Google, sans engagement. Je vous rappelle ${callBack} pour vous le montrer ?`
-          : via
-            ? `Je vous envoie ${via} un exemple de site pour ${sector.kind}, vous regardez tranquillement, et je vous rappelle ${callBack} pour avoir votre avis. Ça vous va ?`
-            : `Je peux vous envoyer par e-mail un exemple de site pour ${sector.kind} : à quelle adresse ? Je vous rappelle ${callBack} pour avoir votre avis. (Note l’adresse dans la fiche.)`,
+          : own
+            ? via
+              ? `J’ai déjà préparé un aperçu de votre site avec les informations de votre fiche Google. Je vous l’envoie ${via}, vous regardez tranquillement, et je vous rappelle ${callBack} pour avoir votre avis. Ça vous va ?`
+              : `J’ai déjà préparé un aperçu de votre site avec les informations de votre fiche Google. Je vous l’envoie par e-mail : à quelle adresse ? Je vous rappelle ${callBack} pour avoir votre avis. (Note l’adresse dans la fiche.)`
+            : via
+              ? `Je vous envoie ${via} un exemple de site pour ${sector.kind}, vous regardez tranquillement, et je vous rappelle ${callBack} pour avoir votre avis. Ça vous va ?`
+              : `Je peux vous envoyer par e-mail un exemple de site pour ${sector.kind} : à quelle adresse ? Je vous rappelle ${callBack} pour avoir votre avis. (Note l’adresse dans la fiche.)`,
       },
       {
         title: 'Si on vous demande le prix',
@@ -130,17 +139,19 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
       },
     ],
     objections: [
-      { q: '« Je n’ai pas le temps »', a: `Je comprends, c’est pour ça qu’on remplit tout à partir de votre fiche Google. Je vous envoie l’exemple ${via ?? 'par e-mail (à quelle adresse ?)'}, trente secondes à regarder, et je vous rappelle ${callBack}.` },
+      { q: '« Je n’ai pas le temps »', a: `Je comprends, c’est pour ça qu’on remplit tout à partir de votre fiche Google. Je vous envoie ${own ? 'l’aperçu de votre site' : 'l’exemple'} ${via ?? 'par e-mail (à quelle adresse ?)'}, trente secondes à regarder, et je vous rappelle ${callBack}.` },
       { q: '« J’ai déjà Instagram / Planity »', a: `C’est très bien pour vos clients actuels et la réservation. Le site, c’est ce que Google met en avant quand quelqu’un cherche « ${sector.search} ${city} » sans vous connaître.` },
       { q: '« C’est trop cher »', a: `C’est ${OFFER.presence}, sans engagement : si ça ne vous apporte rien, vous arrêtez quand vous voulez.` },
       { q: '« Envoyez-moi un mail »', a: 'Avec plaisir. À quelle adresse ? (Note-la dans la fiche.)' },
       { q: '« Ça ne m’intéresse pas »', a: 'Très bien, merci de m’avoir répondu. Je note de ne pas vous rappeler. (Résultat : Pas intéressé. Si la personne demande à ne plus être contactée : Ne plus contacter.)' },
     ],
-    voicemail: `Bonjour, ${sender} de ${brand}. Je vous appelais au sujet d’un site internet pour ${salon}. ${via ? `Je vous envoie ${link ? 'un exemple' : 'quelques informations'} ${via} et je vous rappelle ${callBack}.` : `Je vous rappelle ${callBack}.`} Bonne journée !`,
+    voicemail: `Bonjour, ${sender} de ${brand}. Je vous appelais au sujet d’un site internet pour ${salon}. ${via ? `Je vous envoie ${own ? 'l’aperçu de votre site, déjà préparé,' : link ? 'un exemple' : 'quelques informations'} ${via} et je vous rappelle ${callBack}.` : `Je vous rappelle ${callBack}.`} Bonne journée !`,
   };
 
   // --- Messages (Instagram, WhatsApp) ------------------------------------------------------
-  const linkLine = link ? `Voici un exemple de site pour ${sector.kind} : ${link}` : 'Je peux vous préparer un aperçu à partir de votre fiche Google, gratuitement.';
+  const linkLine = own
+    ? `J’ai préparé un aperçu de votre site à partir de votre fiche Google : ${link}`
+    : link ? `Voici un exemple de site pour ${sector.kind} : ${link}` : 'Je peux vous préparer un aperçu à partir de votre fiche Google, gratuitement.';
   const offerLine = `On crée des sites pour les ${sector.place}s ${ofCity(city)}, déjà remplis à partir de votre fiche Google : ${OFFER.presence}, sans engagement.`;
   const unclaimedLine = unclaimed ? 'Au passage, votre fiche Google n’est pas encore revendiquée : on peut vous aider à la récupérer.' : null;
 
@@ -150,14 +161,14 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
     `Je vois que vous n’avez pas encore de site. ${offerLine}`,
     linkLine,
     unclaimedLine,
-    `Ça vous dirait que je vous prépare le vôtre ? ${optOut}`,
+    own ? `Dites-moi ce que vous en pensez : on l’ajuste ensemble avant la mise en ligne. ${optOut}` : `Ça vous dirait que je vous prépare le vôtre ? ${optOut}`,
     sender,
   ].filter(Boolean).join('\n\n');
 
   const dmFollowUp = [
     `${hello},`,
-    `Je reviens vers vous au sujet du site pour ${salon}. ${link ? `Vous avez pu jeter un œil à l’exemple ? ${link}` : 'Je peux toujours vous préparer un aperçu à partir de votre fiche Google.'}`,
-    'Je peux vous préparer une version avec vos photos, vos horaires et vos prestations, sans engagement.',
+    `Je reviens vers vous au sujet du site pour ${salon}. ${own ? `Vous avez pu jeter un œil à l’aperçu de votre site ? ${link}` : link ? `Vous avez pu jeter un œil à l’exemple ? ${link}` : 'Je peux toujours vous préparer un aperçu à partir de votre fiche Google.'}`,
+    own ? 'On peut l’ajuster avec vos photos et vos prestations, sans engagement.' : 'Je peux vous préparer une version avec vos photos, vos horaires et vos prestations, sans engagement.',
     'Et si ce n’est pas pour vous, un simple « non merci » me suffit.',
     sender,
   ].join('\n\n');
@@ -170,7 +181,7 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
   const emailBody = (followUp
     ? [
         `${hello},`,
-        `Je me permets de revenir vers vous au sujet du site pour ${salon}. ${link ? `L’exemple est toujours ici : ${link}` : ''}`.trim(),
+        `Je me permets de revenir vers vous au sujet du site pour ${salon}. ${link ? `${own ? 'L’aperçu de votre site' : 'L’exemple'} est toujours ici : ${link}` : ''}`.trim(),
         'Dix minutes au téléphone suffisent pour voir ce que ça donnerait avec vos photos et vos horaires. Quel moment vous arrange ?',
       ]
     : [

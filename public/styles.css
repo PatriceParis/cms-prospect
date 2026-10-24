@@ -375,6 +375,7 @@ table.leads { width: 100%; border-collapse: collapse; }
 .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 5px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
 .tag.warn { color: var(--warn-fg); background: var(--warn-bg); border-color: transparent; }
 .tag.ch { color: var(--s-contacte-fg); background: var(--s-contacte-bg); border-color: transparent; }
+.tag.hot { color: var(--s-rep_positive-fg); background: var(--s-rep_positive-bg); border-color: transparent; font-weight: 600; }
 .chs { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
 .overdue { color: var(--overdue); font-weight: 600; }
 .st-A_CONTACTER { background: var(--s-a_contacter-bg); color: var(--s-a_contacter-fg); }
