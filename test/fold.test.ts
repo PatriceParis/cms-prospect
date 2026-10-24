@@ -101,6 +101,16 @@ describe('enregistrement des maquettes', () => {
     assert.equal((await c.execute(`SELECT count(*) n FROM activities`)).rows[0].n, 2);
     assert.equal((await c.execute(`SELECT views FROM maquettes`)).rows[0].views, 3);
   });
+  it('une ouverture n’est qu’un repère : ni statut ni historique', async () => {
+    const c = await db();
+    await recordMaquette(c, maquette());
+    fakeFold(() => ({ status: 200, body: maquette({ views: 1, first_view_at: AT, last_view_at: AT }) }));
+    assert.equal(await handleFoldEvent(c, { event: 'maquette.premiere_vue', place_id: 'ChIJ_test_1' }), 'maquette.premiere_vue');
+    const row = (await c.execute(`SELECT l.crm_status, m.views FROM leads l JOIN maquettes m USING (place_id) WHERE place_id = 'ChIJ_test_1'`)).rows[0];
+    assert.deepEqual({ ...row }, { crm_status: 'A_CONTACTER', views: 1 });
+    assert.equal((await c.execute(`SELECT count(*) n FROM activities`)).rows[0].n, 0);
+  });
+
   it('une opposition reste une opposition', async () => {
     const c = await db();
     await c.execute(`UPDATE leads SET crm_status = 'NE_PAS_CONTACTER' WHERE place_id = 'ChIJ_test_1'`);

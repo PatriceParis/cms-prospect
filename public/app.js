@@ -9,7 +9,7 @@ const STATUS_ORDER = ['A_CONTACTER', 'CONTACTE', 'PAS_DE_REP', 'REP_POSITIVE', '
 const CLOSED = new Set(['REP_NEGATIVE', 'NE_PAS_CONTACTER']);
 const DAILY_NEW = 15; // nouveaux leads proposés chaque jour, en plus des relances
 const PREFS_KEY = 'crm-prefs-v2';
-const DEFAULT_FILTERS = { q: '', priority: '', sector: '', phone: '', reach: '', status: '', unclaimed: false, deadsite: false, due: false };
+const DEFAULT_FILTERS = { q: '', priority: '', sector: '', phone: '', reach: '', status: '', unclaimed: false, deadsite: false, opened: false, due: false };
 
 // Résultats en un clic : statut, relance automatique (jours ouvrés) et effet affiché.
 const OUTCOMES = [
@@ -124,14 +124,17 @@ const channelTags = l =>
   [
     ...[l.instagram && 'Instagram', emailUsable(l) && 'E-mail', l.linkedin_url && 'LinkedIn'].filter(Boolean).map(c => `<span class="tag ch">${c}</span>`),
     deadSite(l) ? `<span class="tag warn" title="Le site indiqué sur sa page Facebook (${esc(l.site_declared)}) ne répond plus">ancien site mort</span>` : '',
-    maquetteTag(l),
+    ...maquetteTags(l),
   ].filter(Boolean).join(' ');
 
-// Signaux de la maquette : une demande « Je veux ce site » prime sur les vues.
-function maquetteTag(l) {
-  if (Number(l.maquette_requests) > 0) return `<span class="tag hot" title="Demande reçue depuis la maquette le ${esc(frDate(l.maquette_last_request_at))}">a demandé son site</span>`;
-  if (Number(l.maquette_views) > 0) return `<span class="tag hot" title="Dernière vue le ${esc(frDate(l.maquette_last_view_at))}">maquette vue ×${esc(l.maquette_views)}</span>`;
-  return '';
+// Signaux de la maquette : des tags (filtrables), jamais un statut. Seule une demande
+// « Je veux ce site » fait avancer le lead (côté serveur, src/fold.ts).
+const maquetteOpened = l => Number(l.maquette_views) > 0;
+function maquetteTags(l) {
+  return [
+    maquetteOpened(l) ? `<span class="tag hot" title="Ouverte ${esc(l.maquette_views)} fois, dernière le ${esc(frDate(l.maquette_last_view_at))}">maquette ouverte</span>` : '',
+    Number(l.maquette_requests) > 0 ? `<span class="tag hot" title="Demande reçue depuis la maquette le ${esc(frDate(l.maquette_last_request_at))}">a demandé son site</span>` : '',
+  ];
 }
 
 const maquetteExpired = l => Boolean(l.maquette_expires_at) && new Date(l.maquette_expires_at) < new Date();
@@ -307,6 +310,7 @@ function matches(l, f, { ignoreStatus = false } = {}) {
   if (f.reach && !(f.reach === 'instagram' ? l.instagram : f.reach === 'email' ? emailUsable(l) : l.linkedin_url)) return false;
   if (f.unclaimed && l.claimed) return false;
   if (f.deadsite && !deadSite(l)) return false;
+  if (f.opened && !maquetteOpened(l)) return false;
   if (f.due && !isDue(l)) return false;
   if (!ignoreStatus && f.status && l.crm_status !== f.status) return false;
   if (f.q) {
@@ -392,6 +396,7 @@ const FILTER_LABELS = {
   status: v => `Statut ${state.statuses[v] ?? v}`,
   unclaimed: () => 'Fiche non revendiquée',
   deadsite: () => 'Ancien site mort',
+  opened: () => 'Maquette ouverte',
   due: () => 'À relancer',
 };
 
@@ -433,6 +438,7 @@ function syncFilterInputs() {
   for (const [id, key] of [['f-q', 'q'], ['f-priority', 'priority'], ['f-sector', 'sector'], ['f-phone', 'phone'], ['f-reach', 'reach']]) $(`#${id}`).value = f[key];
   $('#f-unclaimed').checked = f.unclaimed;
   $('#f-deadsite').checked = f.deadsite;
+  $('#f-opened').checked = f.opened;
   $('#f-due').checked = f.due;
 }
 
@@ -448,6 +454,7 @@ for (const [id, key] of [['f-priority', 'priority'], ['f-sector', 'sector'], ['f
 }
 $('#f-unclaimed').addEventListener('change', e => setFilter('unclaimed', e.target.checked));
 $('#f-deadsite').addEventListener('change', e => setFilter('deadsite', e.target.checked));
+$('#f-opened').addEventListener('change', e => setFilter('opened', e.target.checked));
 $('#f-due').addEventListener('change', e => setFilter('due', e.target.checked));
 $('#status-tabs').addEventListener('click', e => {
   const btn = e.target.closest('[data-status]');
