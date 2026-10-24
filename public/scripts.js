@@ -68,6 +68,10 @@ export function missingSettings(settings) {
   return ['sender', 'brand'].filter(k => !String(settings?.[k] ?? '').trim());
 }
 
+// Adresse dont le domaine ne reçoit pas de courrier (vérification DNS de la cascade) :
+// jamais proposée comme canal d'envoi.
+export const emailUsable = lead => Boolean(lead.email) && lead.email_check !== 'sans_mx' && lead.email_check !== 'inexistant';
+
 // Les relances concernent un lead déjà contacté sans réponse.
 export const isFollowUp = lead => lead.crm_status === 'CONTACTE' || lead.crm_status === 'PAS_DE_REP';
 
@@ -92,7 +96,7 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
   // Canal réel pour envoyer l'exemple : pas de SMS ni de WhatsApp vers un fixe.
   const via = lead.phone_kind === 'mobile' ? 'par SMS ou WhatsApp'
     : lead.instagram ? 'en message sur Instagram'
-    : lead.email ? 'par e-mail'
+    : emailUsable(lead) ? 'par e-mail'
     : null;
 
   // --- Appel -------------------------------------------------------------------------

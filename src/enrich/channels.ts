@@ -1,4 +1,4 @@
-// Validation des comptes Instagram et profils LinkedIn trouvés par Google pour un lead.
+// Validation des comptes Instagram, pages Facebook et profils LinkedIn trouvés par Google pour un lead.
 // Fonctions pures : la mesure du 23/10 a montré que le nom seul ramène des homonymes
 // (un « Ali Sekhar » data scientist, un « LM Beauté » en Isère). Le téléphone et
 // l'adresse de la fiche Google sont les preuves fortes.
@@ -138,6 +138,59 @@ export function instagramEmail(profile: IgProfile | null, snippet: string): { em
   if (inBio) return { email: inBio, source: 'instagram_bio' };
   const inSnippet = emailIn(snippet); // bio gardée en cache par Google
   return inSnippet ? { email: inSnippet, source: 'google_extrait' } : null;
+}
+
+// --- Facebook ----------------------------------------------------------------
+
+const FB_RESERVED = new Set(['groups', 'events', 'watch', 'marketplace', 'share', 'sharer', 'photo.php', 'photo', 'story.php', 'hashtag', 'reel', 'login', 'public', 'people', 'pages', 'p', 'permalink.php', 'help', 'policies']);
+
+// URL d'une page (ou d'une publication de la page) → URL canonique de la page.
+export function facebookPage(url: string): string | null {
+  const m = /^https?:\/\/(?:[a-z-]+\.)?facebook\.com\/(.+)$/i.exec(url);
+  if (!m) return null;
+  const id = /^profile\.php\?id=(\d+)/.exec(m[1]);
+  if (id) return `https://www.facebook.com/profile.php?id=${id[1]}`;
+  let seg: string;
+  try {
+    seg = decodeURIComponent(m[1].split(/[/?#]/)[0]);
+  } catch {
+    return null;
+  }
+  return seg && !FB_RESERVED.has(seg.toLowerCase()) ? `https://www.facebook.com/${seg}/` : null;
+}
+
+export type FbCandidate = { url: string; title: string; snippet: string };
+
+// Mêmes critères qu'Instagram pour retenir un résultat Google ; la preuve vient ensuite
+// de la page elle-même.
+export function facebookCandidates(lead: LeadContact, organic: Organic[], max = 3): FbCandidate[] {
+  const leadPhone = phoneKey(lead.phone);
+  const out: FbCandidate[] = [];
+  for (const r of organic) {
+    const url = r.url ? facebookPage(r.url) : null;
+    if (!url || out.some(c => c.url === url)) continue;
+    const title = r.title ?? '';
+    const snippet = r.description ?? '';
+    const citesPhone = leadPhone !== null && phonesIn(snippet).includes(leadPhone);
+    if (!(nameRelated(lead.name, `${url} ${title}`) || containsFullName(lead.name, title) || citesPhone)) continue;
+    out.push({ url, title, snippet });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+export type FbPage = { facebookUrl?: string; pageUrl?: string; title?: string; phone?: string | null; email?: string | null; website?: string | null; websites?: string[] };
+
+// Seule preuve acceptée : le téléphone affiché par la page elle-même. Un numéro cité
+// dans un extrait Google ne suffit pas : une page de quartier peut citer celui du salon
+// (faux positif « Horizon Caudéran » pour Villa Vahiné, mesure du 24/10).
+export function judgeFacebook(lead: LeadContact, page: FbPage | null): boolean {
+  const leadPhone = phoneKey(lead.phone);
+  return leadPhone !== null && phoneKey(page?.phone) === leadPhone;
+}
+
+export function facebookEmail(page: FbPage | null): string | null {
+  return isEmail(page?.email) ? page.email.trim().toLowerCase() : null;
 }
 
 // --- LinkedIn ----------------------------------------------------------------

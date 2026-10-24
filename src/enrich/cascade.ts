@@ -1,21 +1,24 @@
 import type { Client, InStatement } from '@libsql/client';
 import { runActor } from './apify.ts';
 import {
-  instagramCandidates, instagramEmail, instagramShortcode, judgeInstagram, judgeLinkedIn,
-  type Confidence, type IgCandidate, type IgProfile, type LeadContact, type Organic,
+  facebookCandidates, facebookEmail, facebookPage, instagramCandidates, instagramEmail, instagramShortcode, judgeFacebook, judgeInstagram, judgeLinkedIn,
+  type Confidence, type FbPage, type IgCandidate, type IgProfile, type LeadContact, type Organic,
 } from './channels.ts';
 import { enrichContacts } from './fullenrich.ts';
 import { coreName } from './match.ts';
 import { runStage1, type LeadToEnrich } from './stage1.ts';
+import { emailDomain, siteHost, UNDELIVERABLE, verifyContacts } from './verify.ts';
 
-// Cascade de collecte des contacts, dans l'ordre retenu le 23/10 :
-//   1 registre (personne) → 2 Instagram (compte, e-mail public) → 3 LinkedIn (profil)
-//   → 4 FullEnrich, en dernier recours, pour les dirigeants nommés encore sans e-mail.
+// Cascade de collecte des contacts, dans l'ordre retenu le 23/10 (Facebook ajouté le 24/10) :
+//   1 registre (personne) → 2 Instagram (compte, e-mail public) → 5 Facebook (e-mail public,
+//   ancien site) → 3 LinkedIn (profil) → vérification DNS des e-mails et des sites
+//   → 4 FullEnrich, en dernier recours, pour les dirigeants nommés encore sans e-mail valable.
 // Chaque étape ne traite que les leads qu'elle n'a jamais vus : relancer ne refacture rien.
-export const STAGE = { REGISTRE: 1, INSTAGRAM: 2, LINKEDIN: 3, FULLENRICH: 4 } as const;
+export const STAGE = { REGISTRE: 1, INSTAGRAM: 2, LINKEDIN: 3, FULLENRICH: 4, FACEBOOK: 5 } as const;
 
 const GOOGLE = 'apify/google-search-scraper';
 const IG_PROFILES = 'memo23/apify-instagram-profile-scraper-ppe';
+const FB_PAGES = 'apify/facebook-pages-scraper';
 
 type SerpItem = { searchQuery?: { term?: string }; organicResults?: Organic[] };
 type Person = { firstName: string; lastName: string };
@@ -30,12 +33,14 @@ export type StageRow = {
   instagram?: string | null;
   linkedinUrl?: string | null;
   contactPhone?: string | null;
+  facebookUrl?: string | null;
+  website?: string | null;
   candidates?: unknown;
 };
 
 export type StageReport = { stage: number; leads: number; found: number; withEmail: number; cost: string | null };
 
-const SOURCES: Record<number, string> = { 2: 'instagram (google + profils)', 3: 'linkedin (google)', 4: 'fullenrich' };
+const SOURCES: Record<number, string> = { 2: 'instagram (google + profils)', 3: 'linkedin (google)', 4: 'fullenrich', 5: 'facebook (google + pages)' };
 
 async function saveStage(db: Client, stage: number, mode: string, rows: StageRow[], cost: string | null): Promise<StageReport> {
   const now = new Date().toISOString();
@@ -52,16 +57,17 @@ async function saveStage(db: Client, stage: number, mode: string, rows: StageRow
   });
   const runId = Number(run.rows[0].id);
   const writes: InStatement[] = rows.map(r => ({
-    sql: `INSERT INTO enrichments (place_id, stage, source, outcome, confidence, method, email, email_source, instagram, linkedin_url, contact_phone, candidates, run_id, enriched_at)
-          VALUES (:place_id, :stage, :source, :outcome, :confidence, :method, :email, :email_source, :instagram, :linkedin_url, :contact_phone, :candidates, :run_id, :at)
+    sql: `INSERT INTO enrichments (place_id, stage, source, outcome, confidence, method, email, email_source, instagram, linkedin_url, contact_phone, facebook_url, website, candidates, run_id, enriched_at)
+          VALUES (:place_id, :stage, :source, :outcome, :confidence, :method, :email, :email_source, :instagram, :linkedin_url, :contact_phone, :facebook_url, :website, :candidates, :run_id, :at)
           ON CONFLICT (place_id, stage) DO UPDATE SET source = excluded.source, outcome = excluded.outcome, confidence = excluded.confidence,
             method = excluded.method, email = excluded.email, email_source = excluded.email_source, instagram = excluded.instagram,
-            linkedin_url = excluded.linkedin_url, contact_phone = excluded.contact_phone, candidates = excluded.candidates,
-            run_id = excluded.run_id, enriched_at = excluded.enriched_at`,
+            linkedin_url = excluded.linkedin_url, contact_phone = excluded.contact_phone, facebook_url = excluded.facebook_url,
+            website = excluded.website, candidates = excluded.candidates, run_id = excluded.run_id, enriched_at = excluded.enriched_at`,
     args: {
       place_id: r.placeId, stage, source: SOURCES[stage], outcome: r.outcome, confidence: r.confidence ?? null, method: r.method ?? null,
       email: r.email ?? null, email_source: r.emailSource ?? null, instagram: r.instagram ?? null, linkedin_url: r.linkedinUrl ?? null,
-      contact_phone: r.contactPhone ?? null, candidates: r.candidates === undefined ? null : JSON.stringify(r.candidates), run_id: runId, at: now,
+      contact_phone: r.contactPhone ?? null, facebook_url: r.facebookUrl ?? null, website: r.website ?? null,
+      candidates: r.candidates === undefined ? null : JSON.stringify(r.candidates), run_id: runId, at: now,
     },
   }));
   if (writes.length) await db.batch(writes, 'write');
@@ -132,6 +138,55 @@ export async function runInstagram(db: Client, leads: LeadContact[], mode: strin
   return saveStage(db, STAGE.INSTAGRAM, mode, rows, usd(cost));
 }
 
+// --- Étape 5 : Facebook (e-mail public, site déclaré) --------------------------------
+
+const pageKey = (url: string) => url.toLowerCase().replace(/^https?:\/\/(?:www\.|m\.|[a-z]{2}-[a-z]{2}\.)?/, '').replace(/\/+$/, '');
+
+// Leads avec téléphone seulement : c'est la seule preuve acceptée (judgeFacebook).
+export async function runFacebook(db: Client, leads: LeadContact[], mode: string): Promise<StageReport> {
+  if (!leads.length) return { stage: STAGE.FACEBOOK, leads: 0, found: 0, withEmail: 0, cost: null };
+  const queryOf = (l: LeadContact) => `site:facebook.com ${coreName(l.name)} ${l.city ?? ''}`.trim();
+  const queries = [...new Set(leads.map(queryOf))];
+  const serp = await runActor<SerpItem>(GOOGLE, {
+    queries: queries.join('\n'), maxPagesPerQuery: 1, countryCode: 'fr', languageCode: 'fr', saveHtmlToKeyValueStore: false,
+  }, { maxChargeUsd: Math.max(0.5, queries.length * 0.005) });
+  const organicByQuery = new Map(serp.items.map(i => [i.searchQuery?.term ?? '', i.organicResults ?? []]));
+  const candidatesByLead = new Map(leads.map(l => [l.placeId, facebookCandidates(l, organicByQuery.get(queryOf(l)) ?? [])]));
+
+  const urls = [...new Set([...candidatesByLead.values()].flat().map(c => c.url))];
+  let cost = serp.costUsd ?? 0;
+  const pages = new Map<string, FbPage>();
+  if (urls.length) {
+    const run = await runActor<FbPage>(FB_PAGES, { startUrls: urls.map(url => ({ url })) }, { maxChargeUsd: Math.max(0.5, urls.length * 0.012) });
+    cost += run.costUsd ?? 0;
+    for (const p of run.items) for (const u of [p.facebookUrl, p.pageUrl]) if (u) pages.set(pageKey(facebookPage(u) ?? u), p);
+  }
+
+  const rows: StageRow[] = leads.map(lead => {
+    const judged = (candidatesByLead.get(lead.placeId) ?? []).map(c => {
+      const page = pages.get(pageKey(c.url)) ?? null;
+      return { c, page, valid: judgeFacebook(lead, page) };
+    });
+    const candidates = judged.map(j => ({ url: j.c.url, title: j.page?.title ?? j.c.title, phone: j.page?.phone ?? null, valid: j.valid }));
+    const valid = judged.filter(j => j.valid);
+    if (!valid.length) return { placeId: lead.placeId, outcome: judged.length ? 'ambigu' : 'introuvable', candidates };
+    const withEmail = valid.find(j => facebookEmail(j.page));
+    const site = valid.flatMap(j => [j.page?.website, ...(j.page?.websites ?? [])]).find(w => siteHost(w));
+    return {
+      placeId: lead.placeId,
+      outcome: 'trouve',
+      confidence: 'haute',
+      method: 'téléphone de la page',
+      facebookUrl: valid[0].c.url,
+      email: withEmail ? facebookEmail(withEmail.page) : null,
+      emailSource: withEmail ? 'facebook' : null,
+      website: site ?? null,
+      candidates,
+    };
+  });
+  return saveStage(db, STAGE.FACEBOOK, mode, rows, usd(cost));
+}
+
 // --- Étape 3 : LinkedIn ----------------------------------------------------------
 
 export async function runLinkedIn(db: Client, leads: (LeadContact & { person: Person })[], mode: string): Promise<StageReport> {
@@ -185,10 +240,16 @@ export async function runFullEnrich(db: Client, leads: (LeadContact & { person: 
 
 type EnrichRow = Record<string, unknown> & { place_id: string; stage: number };
 
-// Meilleure valeur par champ : Instagram confirmé avant FullEnrich pour l'e-mail,
+// Meilleure valeur par champ : pour l'e-mail, Instagram puis Facebook (confirmés par le
+// téléphone) puis FullEnrich, en sautant les domaines qui ne reçoivent pas de courrier ;
 // LinkedIn (Google) avant celui renvoyé par FullEnrich.
 export async function consolidate(db: Client): Promise<number> {
   const { rows } = await db.execute(`SELECT * FROM enrichments ORDER BY place_id, stage`);
+  const checks = (await db.execute(`SELECT kind, target, status FROM contact_checks`)).rows;
+  const statusOf = (kind: string) => new Map(checks.filter(c => c.kind === kind).map(c => [String(c.target), String(c.status)]));
+  const mx = statusOf('mx');
+  const sites = statusOf('site');
+  const mxOf = (email: unknown) => mx.get(emailDomain(String(email)) ?? '') ?? null;
   const byLead = new Map<string, Map<number, EnrichRow>>();
   for (const r of rows as unknown as EnrichRow[]) {
     const stages = byLead.get(r.place_id) ?? new Map();
@@ -202,17 +263,23 @@ export async function consolidate(db: Client): Promise<number> {
     const ig = s.get(STAGE.INSTAGRAM);
     const li = s.get(STAGE.LINKEDIN);
     const fe = s.get(STAGE.FULLENRICH);
+    const fb = s.get(STAGE.FACEBOOK);
     const person = reg?.outcome === 'trouve' && reg.person_first_name ? reg : null;
     const igOk = ig?.outcome === 'trouve' ? ig : null;
-    const emailRow = [igOk, fe?.outcome === 'trouve' ? fe : null].find(r => r?.email);
+    const fbOk = fb?.outcome === 'trouve' ? fb : null;
+    const emails = [igOk, fbOk, fe?.outcome === 'trouve' ? fe : null].filter(r => r?.email);
+    // Une adresse qui rebondira reste affichée (marquée) seulement faute de mieux.
+    const emailRow = emails.find(r => !UNDELIVERABLE.has(mxOf(r!.email) ?? '')) ?? emails[0];
+    const host = siteHost(fbOk?.website as string | null);
     writes.push({
-      sql: `UPDATE leads SET contact_first_name = ?, contact_last_name = ?, contact_role = ?, email = ?, email_source = ?,
-              instagram = ?, linkedin_url = ?, contacts_updated_at = ? WHERE place_id = ?`,
+      sql: `UPDATE leads SET contact_first_name = ?, contact_last_name = ?, contact_role = ?, email = ?, email_source = ?, email_check = ?,
+              instagram = ?, linkedin_url = ?, facebook = ?, site_declared = ?, site_status = ?, contacts_updated_at = ? WHERE place_id = ?`,
       args: [
         (person?.person_first_name as string) ?? null, (person?.person_last_name as string) ?? null, (person?.person_role as string) ?? null,
-        (emailRow?.email as string) ?? null, (emailRow?.email_source as string) ?? null,
+        (emailRow?.email as string) ?? null, (emailRow?.email_source as string) ?? null, emailRow ? mxOf(emailRow.email) : null,
         (igOk?.instagram as string) ?? null,
         ((li?.outcome === 'trouve' ? li.linkedin_url : null) ?? fe?.linkedin_url ?? null) as string | null,
+        (fbOk?.facebook_url as string) ?? null, host, host ? (sites.get(host) ?? null) : null,
         now, placeId,
       ],
     });
@@ -223,7 +290,14 @@ export async function consolidate(db: Client): Promise<number> {
 
 // --- Orchestration -------------------------------------------------------------------
 
-export type CascadeReport = { registre: number; stages: StageReport[]; consolidated: number };
+export type CascadeReport = { registre: number; stages: StageReport[]; verified: { mx: number; sites: number }; consolidated: number };
+
+// E-mails des étapes Instagram et Facebook dont le domaine n'est pas connu pour rebondir.
+async function deliverableEmails(db: Client): Promise<Set<string>> {
+  const { rows } = await db.execute(`SELECT place_id, email FROM enrichments WHERE stage IN (${STAGE.INSTAGRAM}, ${STAGE.FACEBOOK}) AND outcome = 'trouve' AND email IS NOT NULL`);
+  const bad = new Set((await db.execute(`SELECT target, status FROM contact_checks WHERE kind = 'mx'`)).rows.filter(r => UNDELIVERABLE.has(String(r.status))).map(r => String(r.target)));
+  return new Set(rows.filter(r => !bad.has(emailDomain(String(r.email)) ?? '')).map(r => String(r.place_id)));
+}
 
 export async function runCascade(db: Client, placeIds: string[], { fullEnrich = true, mode = 'cascade' } = {}): Promise<CascadeReport> {
   const ids = new Set(placeIds);
@@ -252,18 +326,26 @@ export async function runCascade(db: Client, placeIds: string[], { fullEnrich = 
   const ig = await done(STAGE.INSTAGRAM);
   stages.push(await runInstagram(db, leads.filter(l => !ig.has(l.placeId)), mode));
 
+  // 5. Facebook (avant LinkedIn et FullEnrich : gratuit à valider, payé à la page)
+  const fb = await done(STAGE.FACEBOOK);
+  stages.push(await runFacebook(db, leads.filter(l => l.phone && !fb.has(l.placeId)), mode));
+
   // 3. LinkedIn
   const li = await done(STAGE.LINKEDIN);
   stages.push(await runLinkedIn(db, leads.filter(l => !li.has(l.placeId)).flatMap(withPerson), mode));
 
-  // 4. FullEnrich : dirigeants nommés toujours sans e-mail après Instagram
+  // Vérification DNS : un e-mail qui rebondira ne dispense pas de FullEnrich.
+  const verified = await verifyContacts(db);
+
+  // 4. FullEnrich : dirigeants nommés toujours sans e-mail valable après Instagram et Facebook
   if (fullEnrich) {
     const fe = await done(STAGE.FULLENRICH);
-    const hasEmail = new Set(
-      (await db.execute(`SELECT place_id FROM enrichments WHERE stage = ${STAGE.INSTAGRAM} AND outcome = 'trouve' AND email IS NOT NULL`)).rows.map(r => String(r.place_id)),
-    );
+    const hasEmail = await deliverableEmails(db);
     stages.push(await runFullEnrich(db, leads.filter(l => !fe.has(l.placeId) && !hasEmail.has(l.placeId)).flatMap(withPerson), mode));
+    const again = await verifyContacts(db);
+    verified.mx += again.mx;
+    verified.sites += again.sites;
   }
 
-  return { registre: toRegister.length, stages, consolidated: await consolidate(db) };
+  return { registre: toRegister.length, stages, verified, consolidated: await consolidate(db) };
 }

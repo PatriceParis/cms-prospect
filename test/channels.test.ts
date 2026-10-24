@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  emailIn, instagramCandidates, instagramEmail, instagramHandle, instagramShortcode, judgeInstagram, judgeLinkedIn,
-  nameRelated, phoneKey, phonesIn, type LeadContact,
+  emailIn, facebookCandidates, facebookEmail, facebookPage, instagramCandidates, instagramEmail, instagramHandle, instagramShortcode,
+  judgeFacebook, judgeInstagram, judgeLinkedIn, nameRelated, phoneKey, phonesIn, type LeadContact,
 } from '../src/enrich/channels.ts';
 
 // Lead et résultats génériques : aucune donnée réelle dans le dépôt (public).
@@ -78,5 +78,36 @@ describe('LinkedIn', () => {
   it('le nom de la gérante ne compte pas comme nom du salon', () => {
     const named: LeadContact = { ...lead, name: 'Claire Martin' };
     assert.equal(judgeLinkedIn(named, person, { url: 'https://fr.linkedin.com/in/x', title: 'Claire Martin - Coach' }), null);
+  });
+});
+
+describe('Facebook', () => {
+  it('ramène une page ou une publication à l’URL de la page', () => {
+    assert.equal(facebookPage('https://fr-fr.facebook.com/AtelierZephyr/posts/123'), 'https://www.facebook.com/AtelierZephyr/');
+    assert.equal(facebookPage('https://www.facebook.com/profile.php?id=100064000000000&sk=about'), 'https://www.facebook.com/profile.php?id=100064000000000');
+    assert.equal(facebookPage('https://www.facebook.com/groups/bordeaux-beaute/'), null);
+    assert.equal(facebookPage('https://www.instagram.com/atelier.zephyr/'), null);
+  });
+
+  it('retient les pages qui rappellent le salon ou citent son numéro', () => {
+    const found = facebookCandidates(lead, [
+      { url: 'https://www.facebook.com/AtelierZephyrBordeaux/', title: 'Atelier Zéphyr | Bordeaux' },
+      { url: 'https://www.facebook.com/AtelierZephyrBordeaux/photos/1', title: 'Atelier Zéphyr' },
+      { url: 'https://www.facebook.com/mairie.bordeaux/', title: 'Mairie de Bordeaux' },
+      { url: 'https://www.facebook.com/quartier.lilas/', title: 'Quartier des Lilas', description: 'Nos commerces : institut au 05 56 00 00 00' },
+    ]);
+    assert.deepEqual(found.map(c => c.url), ['https://www.facebook.com/AtelierZephyrBordeaux/', 'https://www.facebook.com/quartier.lilas/']);
+  });
+
+  it('seul le téléphone affiché par la page elle-même valide la page', () => {
+    assert.equal(judgeFacebook(lead, { phone: '+33 5 56 00 00 00' }), true);
+    assert.equal(judgeFacebook(lead, { phone: '+33 5 61 00 00 00', title: 'Atelier Zéphyr' }), false);
+    assert.equal(judgeFacebook(lead, null), false);
+    assert.equal(judgeFacebook({ ...lead, phone: null }, { phone: null }), false);
+  });
+
+  it('écarte les e-mails mal formés', () => {
+    assert.equal(facebookEmail({ email: ' Contact@Atelier-Zephyr.fr ' }), 'contact@atelier-zephyr.fr');
+    assert.equal(facebookEmail({ email: 'contact@atelier zephyr.fr' }), null);
   });
 });

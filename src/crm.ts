@@ -50,7 +50,8 @@ const LIST_COLUMNS = `
   l.place_id, l.name, l.search_sector, l.google_category, l.rating, l.reviews_count, l.phone, l.phone_kind,
   l.address, l.postal_code, l.city, l.photos_count, l.claimed, l.maps_url, l.score, l.priority,
   l.crm_status, l.crm_channel, l.next_action_at, l.crm_updated_at,
-  l.contact_first_name, l.contact_last_name, l.contact_role, l.email, l.email_source, l.instagram, l.linkedin_url`;
+  l.contact_first_name, l.contact_last_name, l.contact_role, l.email, l.email_source, l.email_check, l.instagram, l.linkedin_url,
+  l.facebook, l.site_declared, l.site_status`;
 
 // Tentative de contact sortante : un statut CONTACTÉ ou PAS DE RÉP enregistré avec un canal.
 const OUTBOUND = `a.kind = 'statut' AND a.to_status IN ('CONTACTE', 'PAS_DE_REP') AND a.channel IS NOT NULL`;
@@ -162,6 +163,12 @@ export async function updateLead(db: Client, placeId: string, change: LeadChange
   return getLead(db, placeId);
 }
 
+const EMAIL_CHECKS: Record<string, string> = {
+  ok: 'domaine valide',
+  sans_mx: 'rebondira : aucun serveur de messagerie',
+  inexistant: 'rebondira : domaine inexistant',
+};
+
 const CSV_COLUMNS: [label: string, key: string][] = [
   ['Établissement', 'name'],
   ['Secteur', 'search_sector'],
@@ -171,8 +178,12 @@ const CSV_COLUMNS: [label: string, key: string][] = [
   ['Statut CRM', 'crm_status_label'],
   ['Gérant(e)', 'contact_label'],
   ['E-mail', 'email'],
+  ['E-mail vérifié', 'email_check_label'],
   ['Instagram', 'instagram_url'],
+  ['Facebook', 'facebook'],
   ['LinkedIn', 'linkedin_url'],
+  ['Site indiqué sur Facebook', 'site_declared'],
+  ['État de ce site', 'site_status_label'],
   ['Dernier canal', 'crm_channel'],
   ['Relance le', 'next_action_at'],
   ['Téléphone', 'phone'],
@@ -202,6 +213,8 @@ export async function exportCsv(db: Client): Promise<string> {
       claimed_label: l.claimed ? 'Oui' : 'Non',
       contact_label: [l.contact_first_name, l.contact_last_name].filter(Boolean).join(' '),
       instagram_url: l.instagram ? `https://www.instagram.com/${l.instagram}/` : '',
+      email_check_label: EMAIL_CHECKS[l.email_check as string] ?? '',
+      site_status_label: ({ repond: 'répond', mort: 'ne répond plus' } as Record<string, string>)[l.site_status as string] ?? '',
     };
     lines.push(CSV_COLUMNS.map(([, key]) => csvCell(row[key])).join(';'));
   }

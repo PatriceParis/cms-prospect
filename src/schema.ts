@@ -41,7 +41,7 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS activities_by_lead ON activities (place_id, at)`,
   `CREATE TABLE IF NOT EXISTS enrichments (
     place_id               TEXT NOT NULL REFERENCES leads(place_id),
-    stage                  INTEGER NOT NULL,   -- cascade : 1 registre, 2 Instagram, 3 LinkedIn, 4 FullEnrich
+    stage                  INTEGER NOT NULL,   -- cascade : 1 registre, 2 Instagram, 3 LinkedIn, 4 FullEnrich, 5 Facebook
     source                 TEXT NOT NULL,
     outcome                TEXT NOT NULL,      -- trouve | ambigu | introuvable | erreur
     confidence             TEXT,               -- haute | moyenne
@@ -76,6 +76,15 @@ const STATEMENTS = [
     started_at        TEXT NOT NULL,
     finished_at       TEXT
   )`,
+  // Vérifications DNS et HTTP (src/enrich/verify.ts), par domaine d'e-mail ou par site.
+  `CREATE TABLE IF NOT EXISTS contact_checks (
+    kind       TEXT NOT NULL,                  -- mx | site
+    target     TEXT NOT NULL,                  -- domaine de l'e-mail ou hôte du site
+    status     TEXT NOT NULL,                  -- mx : ok | sans_mx | inexistant ; site : repond | mort
+    detail     TEXT,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (kind, target)
+  )`,
   `CREATE TABLE IF NOT EXISTS ingest_runs (
     id            INTEGER PRIMARY KEY,
     file          TEXT NOT NULL,
@@ -106,6 +115,10 @@ const ADDED_COLUMNS: Record<string, [name: string, ddl: string][]> = {
     ['instagram', 'TEXT'],
     ['linkedin_url', 'TEXT'],
     ['contacts_updated_at', 'TEXT'],
+    ['email_check', 'TEXT'], // ok | sans_mx | inexistant (domaine de l'e-mail)
+    ['facebook', 'TEXT'], // page Facebook validée par son propre téléphone
+    ['site_declared', 'TEXT'], // site indiqué sur cette page (hôte)
+    ['site_status', 'TEXT'], // repond | mort
   ],
   enrichments: [
     ['email', 'TEXT'],
@@ -113,6 +126,8 @@ const ADDED_COLUMNS: Record<string, [name: string, ddl: string][]> = {
     ['instagram', 'TEXT'],
     ['linkedin_url', 'TEXT'],
     ['contact_phone', 'TEXT'],
+    ['facebook_url', 'TEXT'],
+    ['website', 'TEXT'],
   ],
   enrich_runs: [
     ['found_with_email', 'INTEGER'],

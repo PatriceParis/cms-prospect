@@ -1,6 +1,6 @@
 // Mini CRM de prospection. JavaScript natif, aucune dépendance.
 // Deux vues : « Aujourd'hui » (la file de travail du SDR) et « Tous les leads ».
-import { buildScripts, SETTINGS_KEY } from '/scripts.js';
+import { buildScripts, emailUsable, SETTINGS_KEY } from '/scripts.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -9,7 +9,7 @@ const STATUS_ORDER = ['A_CONTACTER', 'CONTACTE', 'PAS_DE_REP', 'REP_POSITIVE', '
 const CLOSED = new Set(['REP_NEGATIVE', 'NE_PAS_CONTACTER']);
 const DAILY_NEW = 15; // nouveaux leads proposés chaque jour, en plus des relances
 const PREFS_KEY = 'crm-prefs-v2';
-const DEFAULT_FILTERS = { q: '', priority: '', sector: '', phone: '', reach: '', status: '', unclaimed: false, due: false };
+const DEFAULT_FILTERS = { q: '', priority: '', sector: '', phone: '', reach: '', status: '', unclaimed: false, deadsite: false, due: false };
 
 // Résultats en un clic : statut, relance automatique (jours ouvrés) et effet affiché.
 const OUTCOMES = [
@@ -26,6 +26,12 @@ const EMAIL_SOURCES = {
   google_extrait: 'bio Instagram (cache Google)',
   fullenrich_pro: 'FullEnrich, pro',
   fullenrich_perso: 'FullEnrich, perso',
+  facebook: 'page Facebook',
+};
+
+const EMAIL_BOUNCE = {
+  inexistant: 'rebondira : domaine inexistant',
+  sans_mx: 'rebondira : aucun serveur de messagerie',
 };
 
 const prefs = loadPrefs();
@@ -113,8 +119,12 @@ const isDue = l => Boolean(l.next_action_at) && l.next_action_at <= today() && !
 const contactedToday = l => dayOf(l.last_attempt_at) === today();
 const statusBadge = s => `<span class="badge st-${esc(s)}">${esc(state.statuses[s] ?? s)}</span>`;
 const prioBadge = l => `<span class="prio prio-${esc(l.priority)}" title="Score ${esc(l.score)}/8">${esc(l.priority)}</span>`;
+const deadSite = l => l.site_status === 'mort';
 const channelTags = l =>
-  [l.instagram && 'Instagram', l.email && 'E-mail', l.linkedin_url && 'LinkedIn'].filter(Boolean).map(c => `<span class="tag ch">${c}</span>`).join(' ');
+  [
+    ...[l.instagram && 'Instagram', emailUsable(l) && 'E-mail', l.linkedin_url && 'LinkedIn'].filter(Boolean).map(c => `<span class="tag ch">${c}</span>`),
+    deadSite(l) ? `<span class="tag warn" title="Le site indiqué sur sa page Facebook (${esc(l.site_declared)}) ne répond plus">ancien site mort</span>` : '',
+  ].filter(Boolean).join(' ');
 
 function toast(message, { error = false } = {}) {
   const el = document.createElement('div');
@@ -222,7 +232,7 @@ function quickActions(l) {
   if (l.phone) links.push(`<a class="btn sm" href="tel:${esc(l.phone)}">Appeler</a>`);
   if (l.phone_kind === 'mobile') links.push(`<a class="btn sm" href="${esc(whatsappLink(l.phone))}" target="_blank" rel="noopener noreferrer">WhatsApp</a>`);
   if (l.instagram) links.push(`<a class="btn sm" href="https://ig.me/m/${esc(l.instagram)}" target="_blank" rel="noopener noreferrer">DM Instagram</a>`);
-  if (l.email) links.push(`<a class="btn sm" href="mailto:${esc(l.email)}">E-mail</a>`);
+  if (emailUsable(l)) links.push(`<a class="btn sm" href="mailto:${esc(l.email)}">E-mail</a>`);
   return links.join('');
 }
 
@@ -284,8 +294,9 @@ function matches(l, f, { ignoreStatus = false } = {}) {
   if (f.priority && l.priority !== f.priority) return false;
   if (f.sector && l.search_sector !== f.sector) return false;
   if (f.phone === 'aucun' ? l.phone : f.phone && l.phone_kind !== f.phone) return false;
-  if (f.reach && !(f.reach === 'instagram' ? l.instagram : f.reach === 'email' ? l.email : l.linkedin_url)) return false;
+  if (f.reach && !(f.reach === 'instagram' ? l.instagram : f.reach === 'email' ? emailUsable(l) : l.linkedin_url)) return false;
   if (f.unclaimed && l.claimed) return false;
+  if (f.deadsite && !deadSite(l)) return false;
   if (f.due && !isDue(l)) return false;
   if (!ignoreStatus && f.status && l.crm_status !== f.status) return false;
   if (f.q) {
@@ -370,6 +381,7 @@ const FILTER_LABELS = {
   reach: v => ({ instagram: 'Avec Instagram', email: 'Avec e-mail', linkedin: 'Avec LinkedIn' })[v] ?? v,
   status: v => `Statut ${state.statuses[v] ?? v}`,
   unclaimed: () => 'Fiche non revendiquée',
+  deadsite: () => 'Ancien site mort',
   due: () => 'À relancer',
 };
 
@@ -410,6 +422,7 @@ function syncFilterInputs() {
   const f = state.filters;
   for (const [id, key] of [['f-q', 'q'], ['f-priority', 'priority'], ['f-sector', 'sector'], ['f-phone', 'phone'], ['f-reach', 'reach']]) $(`#${id}`).value = f[key];
   $('#f-unclaimed').checked = f.unclaimed;
+  $('#f-deadsite').checked = f.deadsite;
   $('#f-due').checked = f.due;
 }
 
@@ -424,6 +437,7 @@ for (const [id, key] of [['f-priority', 'priority'], ['f-sector', 'sector'], ['f
   $(`#${id}`).addEventListener('change', e => setFilter(key, e.target.value));
 }
 $('#f-unclaimed').addEventListener('change', e => setFilter('unclaimed', e.target.checked));
+$('#f-deadsite').addEventListener('change', e => setFilter('deadsite', e.target.checked));
 $('#f-due').addEventListener('change', e => setFilter('due', e.target.checked));
 $('#status-tabs').addEventListener('click', e => {
   const btn = e.target.closest('[data-status]');
@@ -458,7 +472,7 @@ async function openLead(id) {
     return;
   }
   const d = state.detail;
-  state.pickChannel = d.phone ? 'telephone' : d.instagram ? 'instagram' : d.email ? 'email' : 'autre';
+  state.pickChannel = d.phone ? 'telephone' : d.instagram ? 'instagram' : emailUsable(d) ? 'email' : 'autre';
   state.scriptTab = scriptTabs(d)[0]?.key ?? 'call';
   renderPanel();
 }
@@ -470,7 +484,7 @@ function scriptTabs(d) {
     d.phone && { key: 'call', label: 'Appel' },
     d.instagram && { key: 'instagram', label: 'Instagram' },
     d.phone_kind === 'mobile' && { key: 'whatsapp', label: 'WhatsApp' },
-    d.email && { key: 'email', label: 'E-mail' },
+    emailUsable(d) && { key: 'email', label: 'E-mail' },
   ].filter(Boolean);
 }
 
@@ -552,9 +566,10 @@ function reachButtons(d) {
   if (d.phone) out.push(`<a class="btn primary" href="tel:${esc(d.phone)}">Appeler ${esc(phoneDisplay(d.phone))}</a>`);
   if (d.phone_kind === 'mobile') out.push(`<a class="btn" href="${esc(whatsappLink(d.phone))}" target="_blank" rel="noopener noreferrer">WhatsApp</a>`);
   if (d.instagram) out.push(`<a class="btn" href="https://ig.me/m/${esc(d.instagram)}" target="_blank" rel="noopener noreferrer">DM Instagram</a>`);
-  if (d.email) out.push(`<a class="btn" href="mailto:${esc(d.email)}">E-mail</a>`);
+  if (emailUsable(d)) out.push(`<a class="btn" href="mailto:${esc(d.email)}">E-mail</a>`);
   if (d.linkedin_url) out.push(`<a class="btn" href="${esc(d.linkedin_url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`);
   if (d.maps_url) out.push(`<a class="btn ghost" href="${esc(d.maps_url)}" target="_blank" rel="noopener noreferrer">Fiche Google</a>`);
+  if (d.facebook) out.push(`<a class="btn ghost" href="${esc(d.facebook)}" target="_blank" rel="noopener noreferrer">Page Facebook</a>`);
   return out.join('');
 }
 
@@ -585,6 +600,7 @@ function renderPanel() {
         ${statusBadge(d.crm_status)}
         ${d.next_action_at ? `<span class="sub ${isDue(d) ? 'overdue' : ''}">Relance le ${esc(frDate(d.next_action_at))}</span>` : ''}
         ${d.claimed ? '' : '<span class="tag warn">fiche non revendiquée</span>'}
+        ${deadSite(d) ? '<span class="tag warn">ancien site mort</span>' : ''}
       </div>
       ${scoreDetail(d)}
       ${locked ? '<p class="notice stop">Opposition enregistrée : ne plus contacter ce lead, sur aucun canal.</p>' : ''}
@@ -620,7 +636,9 @@ function renderPanel() {
           ${who ? `<dt>Gérant(e)</dt><dd>${esc(who)}${d.contact_role ? ` <span class="sub">· ${esc(d.contact_role)}</span>` : ''}</dd>` : ''}
           <dt>Téléphone</dt><dd>${d.phone ? `${esc(phoneDisplay(d.phone))} <span class="tag">${esc(phoneTag(d.phone_kind))}</span>` : '—'}</dd>
           ${d.instagram ? `<dt>Instagram</dt><dd><a href="https://www.instagram.com/${esc(d.instagram)}/" target="_blank" rel="noopener noreferrer">@${esc(d.instagram)}</a></dd>` : ''}
-          ${d.email ? `<dt>E-mail</dt><dd>${esc(d.email)} <span class="sub">· ${esc(EMAIL_SOURCES[d.email_source] ?? d.email_source ?? '')}</span></dd>` : ''}
+          ${d.email ? `<dt>E-mail</dt><dd>${emailUsable(d) ? esc(d.email) : `<s>${esc(d.email)}</s> <span class="tag warn">${esc(EMAIL_BOUNCE[d.email_check])}</span>`} <span class="sub">· ${esc(EMAIL_SOURCES[d.email_source] ?? d.email_source ?? '')}</span></dd>` : ''}
+          ${d.facebook ? `<dt>Facebook</dt><dd><a href="${esc(d.facebook)}" target="_blank" rel="noopener noreferrer">${esc(d.facebook.replace(/^https:\/\/www\.facebook\.com\//, '').replace(/\/$/, ''))}</a> <span class="sub">· même téléphone que la fiche</span></dd>` : ''}
+          ${d.site_declared ? `<dt>Site indiqué</dt><dd>${esc(d.site_declared)} ${deadSite(d) ? '<span class="tag warn">ne répond plus</span>' : d.site_status === 'repond' ? '<span class="sub">· répond encore : vérifie qu’il s’agit bien du site du salon</span>' : ''} <span class="sub">· sur sa page Facebook</span></dd>` : ''}
           <dt>Adresse</dt><dd>${esc(d.address)}, ${esc(d.postal_code)} ${esc(d.city)}</dd>
           <dt>Google</dt><dd>${esc(d.reviews_count)} avis · ${esc(d.rating)}★ · ${esc(d.photos_count)} photos</dd>
           ${d.opening_hours ? `<dt>Horaires</dt><dd class="sub">${esc(d.opening_hours)}</dd>` : ''}

@@ -39,6 +39,15 @@ export async function copyEnrichments(source: Client, target: Client): Promise<S
     args: ec.map(c => r[c] ?? null),
   })));
 
+  // Vérifications DNS et HTTP : la plus récente l'emporte.
+  const checks = (await source.execute('SELECT kind, target, status, detail, checked_at FROM contact_checks')).rows;
+  await writeChunks(target, checks.map(c => ({
+    sql: `INSERT INTO contact_checks (kind, target, status, detail, checked_at) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT (kind, target) DO UPDATE SET status = excluded.status, detail = excluded.detail, checked_at = excluded.checked_at
+          WHERE excluded.checked_at > contact_checks.checked_at`,
+    args: [c.kind, c.target, c.status, c.detail, c.checked_at],
+  })));
+
   return {
     runs: runs.length,
     enrichments: kept.length,

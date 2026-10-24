@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildScripts, missingSettings, ofCity, previewUrl, salonName } from '../public/scripts.js';
+import { buildScripts, emailUsable, missingSettings, ofCity, previewUrl, salonName } from '../public/scripts.js';
 
 // Lead générique : aucune donnée réelle dans le dépôt (public).
 const settings = { sender: 'Camille', brand: 'Vitrine Locale' };
@@ -50,6 +50,10 @@ describe('scripts', () => {
     assert.match(proposal({ phone_kind: 'fixe', instagram: 'zephyr' }), /en message sur Instagram/);
     assert.match(proposal({ phone_kind: 'fixe', email: 'a@b.fr' }), /par e-mail un exemple|envoie par e-mail/);
     assert.match(proposal({ phone_kind: 'fixe' }), /à quelle adresse/);
+    // Adresse dont le domaine ne reçoit pas de courrier : on redemande l'adresse.
+    assert.match(proposal({ phone_kind: 'fixe', email: 'a@b.fr', email_check: 'inexistant' }), /à quelle adresse/);
+    assert.equal(emailUsable({ email: 'a@b.fr', email_check: 'sans_mx' }), false);
+    assert.equal(emailUsable({ email: 'a@b.fr', email_check: null }), true);
     const voicemail = buildScripts({ ...lead, phone_kind: 'fixe' }, settings).call.voicemail;
     assert.match(voicemail, /^Bonjour, Camille de Vitrine Locale\./);
     assert.doesNotMatch(voicemail, /par message|SMS|WhatsApp/);

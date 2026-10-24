@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { Client } from '@libsql/client';
-import { openDb } from './db.ts';
+import { LOCAL_DB_URL, openDb } from './db.ts';
 import { createClient } from '@libsql/client';
 import { runCascade } from './enrich/cascade.ts';
 import { copyEnrichments } from './enrich/sync.ts';
@@ -15,7 +15,8 @@ const USAGE = `Usage :
   npm run enrich -- --sample 20 [--nouveaux]
   npm run enrich -- --rejouer
   npm run enrich -- --cascade [--limit N] [--sans-fullenrich]
-  npm run sync -- <base source, ex. file:data/prospection.db>`;
+  npm run sync -- <base source, ex. file:data/prospection.db>
+Ajouter --local pour viser data/prospection.db même si TURSO_DATABASE_URL est défini.`;
 
 // Copie les enrichissements d'une base source vers la base courante (Turso si configurée).
 async function sync(db: Client, args: string[]) {
@@ -31,7 +32,7 @@ async function sync(db: Client, args: string[]) {
   source.close();
 }
 
-const STAGE_NAMES: Record<number, string> = { 2: 'Instagram', 3: 'LinkedIn', 4: 'FullEnrich' };
+const STAGE_NAMES: Record<number, string> = { 2: 'Instagram', 3: 'LinkedIn', 4: 'FullEnrich', 5: 'Facebook' };
 
 // Cascade complète de collecte des contacts sur les leads cibles (ou les N premiers
 // de l'échantillon reproductible). Chaque étape saute les leads qu'elle a déjà traités.
@@ -50,13 +51,16 @@ async function cascade(db: Client, args: string[]) {
     const name = STAGE_NAMES[s.stage].padEnd(10);
     console.log(`  ${name} : ${s.leads} leads, ${s.found} trouvés, ${s.withEmail} avec e-mail${s.cost ? ` · coût ${s.cost}` : ''}`);
   }
+  console.log(`  Vérifiés   : ${r.verified.mx} domaines d'e-mail, ${r.verified.sites} sites`);
   const { rows } = await db.execute({
-    sql: `SELECT count(*) AS n, count(email) AS email, count(instagram) AS ig, count(linkedin_url) AS li, count(contact_first_name) AS person, count(phone) AS phone
+    sql: `SELECT count(*) AS n, count(email) AS email, sum(email_check IN ('sans_mx', 'inexistant')) AS bounce, count(instagram) AS ig,
+            count(facebook) AS fb, sum(site_status = 'mort') AS dead, count(linkedin_url) AS li, count(contact_first_name) AS person, count(phone) AS phone
           FROM leads WHERE place_id IN (${leads.map(() => '?').join(',')})`,
     args: leads,
   });
   const t = rows[0];
-  console.log(`\nSur ces ${t.n} leads : téléphone ${t.phone}, dirigeant nommé ${t.person}, Instagram ${t.ig}, e-mail ${t.email}, LinkedIn ${t.li}.`);
+  console.log(`\nSur ces ${t.n} leads : téléphone ${t.phone}, dirigeant nommé ${t.person}, Instagram ${t.ig}, Facebook ${t.fb}, ` +
+    `e-mail ${t.email} (dont ${t.bounce ?? 0} qui rebondiront), LinkedIn ${t.li}, ancien site mort ${t.dead ?? 0}.`);
 }
 
 async function ingest(db: Client, files: string[]) {
@@ -140,7 +144,10 @@ async function enrich(db: Client, args: string[]) {
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 const [command, ...args] = process.argv.slice(2);
-const db = await openDb();
+const local = args.includes('--local');
+if (local && command === 'sync') throw new Error('sync vise la production : pas de --local.');
+const db = await openDb(local ? LOCAL_DB_URL : undefined);
+console.log(`Base : ${local || !process.env.TURSO_DATABASE_URL ? 'locale (data/prospection.db)' : 'production (Turso)'}`);
 try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
