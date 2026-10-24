@@ -136,6 +136,9 @@ input, select, textarea {
 input:hover, select:hover, textarea:hover { border-color: var(--border-strong); }
 textarea { resize: vertical; width: 100%; }
 .field { display: grid; gap: 6px; font-weight: 500; }
+.email-field { margin-bottom: 10px; }
+.email-field input { width: 100%; }
+.email-field textarea { min-height: 260px; line-height: 1.5; font-weight: 400; }
 .check { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; color: var(--text-2); }
 
 /* --- Connexion ---------------------------------------------------------------- */

@@ -534,15 +534,18 @@ function scriptSection(d) {
     const wa = `https://wa.me/${String(d.phone).replace(/\D/g, '')}?text=${encodeURIComponent(s.whatsapp)}`;
     body = messageBlock(s.whatsapp, `<a class="btn sm primary" href="${esc(wa)}" target="_blank" rel="noopener noreferrer" data-channel-used="whatsapp">Ouvrir WhatsApp avec ce message</a><button type="button" class="btn sm" data-copy="whatsapp">Copier</button>`);
   } else if (tab === 'email') {
-    const mailto = `mailto:${d.email}?subject=${encodeURIComponent(s.email.subject)}&body=${encodeURIComponent(s.email.body)}`;
-    body = `<div class="subject"><span class="sub">Objet</span> ${esc(s.email.subject)}</div>` +
-      messageBlock(s.email.body, `<a class="btn sm primary" href="${esc(mailto)}" data-channel-used="email">Ouvrir dans la messagerie</a><button type="button" class="btn sm" data-copy="email">Copier</button>`);
+    const draft = emailDraft(d, s);
+    const open = inCallWindow();
+    body = `<label class="field email-field">Objet<input type="text" data-email-field="subject" maxlength="150" value="${esc(draft.subject)}"></label>
+      <label class="field email-field">Message<textarea data-email-field="body" rows="12" maxlength="5000">${esc(draft.body)}</textarea></label>
+      <p class="sub">À ${esc(d.email)} · ajouté à l’envoi : une ligne de désinscription. Envoi du lundi au vendredi, de 9 h à 18 h.</p>
+      <div class="msg-actions"><button type="button" class="btn sm primary" data-send-email ${open ? '' : 'disabled title="Hors créneau : du lundi au vendredi, de 9 h à 18 h"'}>Envoyer l’e-mail</button><button type="button" class="btn sm" data-copy="email">Copier</button><button type="button" class="btn sm ghost" data-reset-email>Revenir au modèle</button></div>`;
   }
   return `<section class="p-section">
     <h3>${title}</h3>
     <div class="seg script-tabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-script-tab="${t.key}" aria-selected="${t.key === tab}">${t.label}</button>`).join('')}</div>
     ${body}
-    <p class="kbd">Après l’envoi, note le résultat ci-dessous (« Contacté, en attente »).</p>
+    <p class="kbd">${tab === 'email' ? 'L’envoi note le contact et la relance à J+3 tout seul.' : 'Après l’envoi, note le résultat ci-dessous (« Contacté, en attente »).'}</p>
   </section>`;
 }
 
@@ -552,9 +555,17 @@ function useChannel(channel) {
   for (const b of document.querySelectorAll('[data-channel]')) b.setAttribute('aria-checked', b.dataset.channel === channel);
 }
 
+// Brouillon d'e-mail par lead, gardé pendant la session : l'édition survit aux changements d'onglet.
+const emailDrafts = new Map();
+function emailDraft(d, s = state.scripts) {
+  if (!emailDrafts.has(d.place_id)) emailDrafts.set(d.place_id, { subject: s.email.subject, body: s.email.body });
+  return emailDrafts.get(d.place_id);
+}
+
 async function copyScript(key) {
   const s = state.scripts;
-  const text = key === 'email' ? `Objet : ${s.email.subject}\n\n${s.email.body}` : s[key];
+  const draft = key === 'email' ? emailDraft(state.detail, s) : null;
+  const text = draft ? `Objet : ${draft.subject}\n\n${draft.body}` : s[key];
   try {
     await navigator.clipboard.writeText(text);
     toast('Message copié');
@@ -722,10 +733,11 @@ function activityHtml(a) {
   return `<li><span class="when">${esc(frDateTime(a.at))}</span><div>${what}</div>${body}</li>`;
 }
 
-async function save(payload, done) {
+// suffix : '/email' pour l'envoi d'un e-mail, qui enregistre lui-même le contact.
+async function save(payload, done, suffix = '') {
   const d = state.detail;
   try {
-    state.detail = await api(`/api/leads/${encodeURIComponent(d.place_id)}`, { method: 'POST', json: payload });
+    state.detail = await api(`/api/leads/${encodeURIComponent(d.place_id)}${suffix}`, { method: 'POST', json: payload });
   } catch (err) {
     toast(err.message, { error: true });
     return;
@@ -776,6 +788,22 @@ $('#panel').addEventListener('click', async e => {
     return;
   }
   const d = state.detail;
+  if (t.dataset.resetEmail !== undefined) {
+    emailDrafts.delete(d.place_id);
+    return renderPanel();
+  }
+  if (t.dataset.sendEmail !== undefined) {
+    const draft = emailDraft(d);
+    if (!draft.subject.trim() || !draft.body.trim()) return toast('Objet et message obligatoires.', { error: true });
+    if (!confirm(`Envoyer cet e-mail à ${d.email} ?`)) return;
+    const fromName = `${state.settings.sender} de ${state.settings.brand}`;
+    t.disabled = true;
+    const before = state.detail;
+    await save({ subject: draft.subject, body: draft.body, fromName }, `E-mail envoyé à ${d.email}`, '/email');
+    if (state.detail !== before) emailDrafts.delete(d.place_id); // envoyé : le prochain e-mail repart du modèle
+    t.disabled = false; // échec : le bouton redevient utilisable
+    return;
+  }
   const note = $('#note')?.value.trim() ?? '';
   if (t.dataset.action === 'close') return closePanel();
   if (t.dataset.nav) return step(Number(t.dataset.nav));
@@ -806,6 +834,11 @@ $('#panel').addEventListener('click', async e => {
     if (!Object.keys(payload).length) return toast('Rien à enregistrer.', { error: true });
     return save(payload, 'Fiche mise à jour');
   }
+});
+
+$('#panel').addEventListener('input', e => {
+  const field = e.target.dataset?.emailField;
+  if (field && state.detail) emailDraft(state.detail)[field] = e.target.value;
 });
 
 $('#scrim').addEventListener('click', closePanel);

@@ -176,30 +176,38 @@ export function buildScripts(lead, settings, { now = new Date() } = {}) {
   const instagram = followUp ? dmFollowUp : dmFirst('');
   const whatsapp = followUp ? dmFollowUp : dmFirst('Votre numéro figure sur votre fiche Google. ');
 
-  // --- E-mail (canal secondaire) -------------------------------------------------------
-  const subject = followUp ? `Re : un site pour ${salon}` : `Un site pour ${salon}, prêt en quelques jours`;
-  const emailBody = (followUp
+  // --- E-mail (envoyé depuis la fiche, via Resend) ------------------------------------------
+  // Règles de prospection à froid : texte brut, 60 à 90 mots, un signal propre au salon en
+  // ouverture, une seule question pour finir. Même objet pour la relance (pas de faux « Re : »),
+  // angle différent : la 1re parle de la maquette, la relance des nouveaux clients.
+  // La mention de désinscription est ajoutée par le serveur à l'envoi : elle ne s'édite pas.
+  const recommended = (Number(lead.reviews_count) || 0) >= 10 && (Number(lead.rating) || 0) >= 4.5;
+  const signal = recommended
+    ? `${hook.charAt(0).toUpperCase()}${hook.slice(1)} ${hook.startsWith('vos') ? 'le montrent' : 'le montre'} : vos clients vous recommandent. Mais quand quelqu’un cherche « ${sector.search} ${city} » sans vous connaître, il ne trouve pas de site à votre nom.`
+    : `Quand quelqu’un cherche « ${sector.search} ${city} », il tombe sur votre fiche Google, mais pas sur un site à votre nom.`;
+  const emailBody = followUp
     ? [
         `${hello},`,
-        `Je me permets de revenir vers vous au sujet du site pour ${salon}. ${link ? `${own ? 'L’aperçu de votre site' : 'L’exemple'} est toujours ici : ${link}` : ''}`.trim(),
-        'Dix minutes au téléphone suffisent pour voir ce que ça donnerait avec vos photos et vos horaires. Quel moment vous arrange ?',
+        `Je reviens vers vous au sujet du site ${ofCity(salon)}.${link ? ` ${own ? 'L’aperçu' : 'L’exemple'} est toujours là : ${link}` : ''}`,
+        `Un site à votre nom, c’est ce que Google montre en premier à ceux qui cherchent « ${sector.search} ${city} » : de nouveaux clients, sans rien changer à votre organisation.`,
+        'Est-ce que ce serait utile pour vous, ou ce n’est pas le moment ?',
       ]
     : [
         `${hello},`,
-        `Je suis ${sender}, de ${brand}. J’ai découvert ${salon} et ${hook} : bravo.`,
-        `Je vois que vous n’avez pas encore de site internet. ${offerLine} Pas de frais de mise en ligne, et vous gardez la main pour le modifier vous-même.`,
-        linkLine,
-        unclaimedLine,
-        'Dix minutes au téléphone suffisent pour vous montrer ce que ça donnerait pour vous. Quel moment vous arrange ?',
-      ]
-  ).filter(Boolean);
+        signal,
+        own
+          ? `J’ai donc préparé un aperçu de votre site, à partir de votre fiche Google : ${link}`
+          : link ? `Voici un exemple de site pour ${sector.kind} : ${link}` : 'Je peux vous préparer un aperçu de votre site à partir de votre fiche Google, gratuitement.',
+        `${own ? 'Si l’aperçu vous plaît, votre site peut être en ligne cette semaine' : 'Le vôtre peut être en ligne cette semaine'} : ${OFFER.presence}, sans engagement et sans frais de mise en ligne.`,
+        own ? 'Je vous laisse y jeter un œil ?' : 'Je vous prépare le vôtre ?',
+      ];
   const email = {
-    subject,
+    subject: `Le site ${ofCity(salon)}`,
     body: [
       ...emailBody,
-      `Bonne journée,\n${sender}\n${brand}`,
-      `Vous recevez ce message parce que ${salon} est référencé sur Google Maps. Pour ne plus être contacté, répondez simplement « STOP ».`,
-    ].join('\n\n'),
+      `${sender}\n${brand}`,
+      !followUp && unclaimed ? 'P.S. Votre fiche Google n’est pas encore revendiquée : on peut vous aider à la récupérer, gratuitement.' : null,
+    ].filter(Boolean).join('\n\n'),
   };
 
   return { missing, followUp, link, call, instagram, whatsapp, email };

@@ -5,6 +5,7 @@ import { CHANNELS, CRM_STATUSES, CrmError, exportCsv, getLead, listLeads, update
 import { dbFingerprint } from '../fingerprint.ts';
 import { foldConfigured, handleFoldEvent, signatureHeader, syncMaquettes, verifySignature } from '../fold.ts';
 import { ingestBuffer } from '../ingest.ts';
+import { mailConfig, sendProspectEmail, unsubscribe, unsubscribeInfo, unsubscribePage } from '../mail.ts';
 import { scoreLeads } from '../score.ts';
 import { checkPassword, clearedCookie, createSession, readCookie, sessionCookie, verifySession } from './auth.ts';
 
@@ -111,7 +112,24 @@ export function createHandler(deps: HandlerDeps) {
           FOLD_API_KEY: keyState(process.env.FOLD_API_KEY, 'fold_'),
           FOLD_WEBHOOK_SECRET: keyState(process.env.FOLD_WEBHOOK_SECRET, 'whsec_'),
         };
-        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, database, databaseFingerprint, counts });
+        const mail = mailConfig();
+        const emails = { RESEND_API: Boolean(mail.key), MAIL_FROM: Boolean(mail.from), MAIL_REPLY_TO: Boolean(mail.replyTo) };
+        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, emails, database, databaseFingerprint, counts });
+      }
+
+      // Désinscription depuis un e-mail : publique, identifiée par un jeton aléatoire.
+      // GET affiche une confirmation (les antivirus qui ouvrent les liens ne désinscrivent
+      // personne) ; POST désinscrit, y compris en un clic depuis la messagerie (RFC 8058).
+      if (path === '/api/desinscription' && (method === 'GET' || method === 'POST')) {
+        const token = url.searchParams.get('t') ?? '';
+        const db = await deps.getDb();
+        const html = { 'Content-Type': 'text/html; charset=utf-8' };
+        if (method === 'POST') {
+          await readBody(req, JSON_LIMIT);
+          return send(res, 200, unsubscribePage((await unsubscribe(db, token)) ? 'fait' : 'invalide'), html);
+        }
+        const info = await unsubscribeInfo(db, token);
+        return send(res, info ? 200 : 404, unsubscribePage(info ? 'confirmer' : 'invalide', token, info?.name ?? ''), html);
       }
 
       // Notifications de l'outil de maquettes : publiques, authentifiées par leur signature
@@ -154,6 +172,11 @@ export function createHandler(deps: HandlerDeps) {
         const db = await deps.getDb();
         await refreshMaquettes(db);
         return send(res, 200, { leads: await listLeads(db) });
+      }
+
+      const emailMatch = /^\/api\/leads\/([^/]+)\/email$/.exec(path);
+      if (emailMatch && method === 'POST') {
+        return send(res, 200, await sendProspectEmail(await deps.getDb(), decodeURIComponent(emailMatch[1]), await readJson(req)));
       }
 
       const leadMatch = /^\/api\/leads\/([^/]+)$/.exec(path);

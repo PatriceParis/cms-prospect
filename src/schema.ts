@@ -100,6 +100,23 @@ const STATEMENTS = [
     error           TEXT,
     synced_at       TEXT NOT NULL
   )`,
+  // E-mails de prospection envoyés depuis la fiche (src/mail.ts) et liste de suppression.
+  `CREATE TABLE IF NOT EXISTS emails (
+    id           INTEGER PRIMARY KEY,
+    place_id     TEXT NOT NULL REFERENCES leads(place_id),
+    to_email     TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    body         TEXT NOT NULL,              -- texte envoyé, pied de désinscription compris
+    provider_id  TEXT,                       -- identifiant Resend
+    unsub_token  TEXT NOT NULL UNIQUE,       -- lien de désinscription, aléatoire
+    sent_at      TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS suppressions (
+    email     TEXT PRIMARY KEY,              -- en minuscules ; plus jamais d'e-mail vers elle
+    place_id  TEXT,
+    reason    TEXT NOT NULL,
+    at        TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS app_state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

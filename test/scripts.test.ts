@@ -69,7 +69,8 @@ describe('scripts', () => {
     const s = buildScripts(lead, settings);
     assert.match(s.instagram, /je ne vous relancerai pas/);
     assert.match(s.whatsapp, /je ne vous relancerai pas/);
-    assert.match(s.email.body, /répondez simplement « STOP »/);
+    // E-mail : la désinscription est ajoutée par le serveur à l'envoi (src/mail.ts).
+    assert.doesNotMatch(s.email.body, /STOP|désinscri/);
   });
 
   it('sans prénom ni fiche à récupérer ni exemple de site : textes adaptés, sans trou', () => {
@@ -93,11 +94,26 @@ describe('scripts', () => {
     assert.match(expired.instagram, /Voici un exemple de site/);
   });
 
+  it('e-mail : court, signal du salon, maquette, une seule question', () => {
+    const own = { ...lead, maquette_link: 'https://apercu.example/abc123', maquette_expires_at: '2026-11-20T00:00:00Z' };
+    const { email } = buildScripts(own, settings, { now: friday });
+    assert.equal(email.subject, 'Le site d’Atelier Zéphyr');
+    const words = email.body.split(/\s+/).filter(Boolean).length;
+    assert.ok(words <= 110, `${words} mots`);
+    assert.match(email.body, /^Bonjour Claire,\n\nVos 48 avis à 4,8\/5 sur Google le montrent : vos clients vous recommandent\./);
+    assert.match(email.body, /J’ai donc préparé un aperçu de votre site, à partir de votre fiche Google : https:\/\/apercu\.example\/abc123/);
+    assert.equal((email.body.match(/\?/g) ?? []).length, 1);
+    assert.match(email.body, /P\.S\. Votre fiche Google n’est pas encore revendiquée/);
+    // Note faible : pas de « vos clients vous recommandent ».
+    assert.doesNotMatch(buildScripts({ ...own, rating: 3.9 }, settings).email.body, /recommandent/);
+  });
+
   it('un lead déjà contacté reçoit les relances', () => {
     const s = buildScripts({ ...lead, crm_status: 'PAS_DE_REP' }, settings);
     assert.equal(s.followUp, true);
     assert.match(s.instagram, /Je reviens vers vous/);
-    assert.match(s.email.subject, /^Re :/);
+    assert.equal(s.email.subject, 'Le site d’Atelier Zéphyr'); // même objet, sans faux « Re : »
+    assert.match(s.email.body, /Est-ce que ce serait utile pour vous, ou ce n’est pas le moment \?/);
   });
 
   it('expéditeur et marque obligatoires', () => {
