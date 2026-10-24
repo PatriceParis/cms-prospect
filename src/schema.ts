@@ -18,7 +18,7 @@ const STATEMENTS = [
     opening_hours   TEXT,
     claimed         INTEGER NOT NULL, -- 1 = fiche revendiquée par le gérant
     maps_url        TEXT,
-    status          TEXT NOT NULL,    -- pipeline : nouveau | hors_cible
+    status          TEXT NOT NULL,    -- pipeline : nouveau | hors_cible | exclu (à la main, jamais retrié)
     status_reason   TEXT,
     score           INTEGER,
     priority        TEXT,             -- A | B | C

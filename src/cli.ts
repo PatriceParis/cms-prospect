@@ -10,6 +10,7 @@ import { runStage1, selectEnriched, selectSample, type LeadResult } from './enri
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
 import { generateMaquettes, syncMaquettes, type GenerateReport } from './fold.ts';
+import { excludeLeads } from './crm.ts';
 
 const USAGE = `Usage :
   npm run ingest -- <export Apify .xlsx|.json> [...]
@@ -20,7 +21,19 @@ const USAGE = `Usage :
   npm run sync -- <base source, ex. file:data/prospection.db>
   npm run maquettes -- [--limit N]          crée la maquette des leads qui n'en ont pas
   npm run maquettes -- --sync [--complet]   relit liens, vues et demandes depuis l'outil
+  npm run exclure -- <Place ID> [...] [--raison "texte"] [--annuler]
 Ajouter --local pour viser data/prospection.db même si TURSO_DATABASE_URL est défini.`;
+
+// Retire des leads de la prospection (ou les y remet avec --annuler).
+async function exclure(db: Client, args: string[]) {
+  const i = args.indexOf('--raison');
+  const reason = i >= 0 ? args[i + 1] : undefined;
+  const ids = args.filter((a, k) => !a.startsWith('--') && (i < 0 || k !== i + 1));
+  if (!ids.length || (i >= 0 && !reason)) throw new Error(USAGE);
+  const annuler = args.includes('--annuler');
+  const names = await excludeLeads(db, ids, { reason, annuler });
+  console.log(names.length ? `${annuler ? 'Remis dans la liste' : 'Retirés de la liste'} : ${names.join(' ; ')}` : 'Aucun lead concerné (Place ID inconnu ou déjà traité).');
+}
 
 // Maquettes de site (API Fold) : création des manquantes, ou simple synchronisation.
 async function maquettes(db: Client, args: string[]) {
@@ -185,6 +198,7 @@ try {
   else if (command === 'score') await score(db);
   else if (command === 'sync') await sync(db, args);
   else if (command === 'maquettes') await maquettes(db, args);
+  else if (command === 'exclure') await exclure(db, args);
   else if (command === 'enrich' && args.includes('--cascade')) await cascade(db, args);
   else if (command === 'enrich') await enrich(db, args);
   else throw new Error(USAGE);

@@ -55,6 +55,8 @@ const LIST_COLUMNS = `
   m.link AS maquette_link, m.status AS maquette_status, m.expires_at AS maquette_expires_at, m.views AS maquette_views,
   m.last_view_at AS maquette_last_view_at, m.requests AS maquette_requests, m.last_request_at AS maquette_last_request_at`;
 const FROM_LEADS = `leads l LEFT JOIN maquettes m ON m.place_id = l.place_id`;
+// Jamais affichés : hors cible à l'import, ou exclus à la main (npm run exclure).
+const HIDDEN = `('hors_cible', 'exclu')`;
 
 // Tentative de contact sortante : un statut CONTACTÉ ou PAS DE RÉP enregistré avec un canal.
 const OUTBOUND = `a.kind = 'statut' AND a.to_status IN ('CONTACTE', 'PAS_DE_REP') AND a.channel IS NOT NULL`;
@@ -65,7 +67,7 @@ export async function listLeads(db: Client) {
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id) AS last_activity_at,
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS last_attempt_at,
       (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS first_attempt_at
-    FROM ${FROM_LEADS} WHERE l.status <> 'hors_cible'
+    FROM ${FROM_LEADS} WHERE l.status NOT IN ${HIDDEN}
     ORDER BY l.score DESC, l.reviews_count DESC`);
   return rows.map(plain);
 }
@@ -76,7 +78,7 @@ export const parisDay = (d: Date) => PARIS_DAY.format(d);
 
 export async function getLead(db: Client, placeId: string): Promise<LeadFields & { activities: LeadFields[] }> {
   const lead = await db.execute({
-    sql: `SELECT ${LIST_COLUMNS}, l.opening_hours, l.neighborhood, l.first_seen_at FROM ${FROM_LEADS} WHERE l.place_id = ? AND l.status <> 'hors_cible'`,
+    sql: `SELECT ${LIST_COLUMNS}, l.opening_hours, l.neighborhood, l.first_seen_at FROM ${FROM_LEADS} WHERE l.place_id = ? AND l.status NOT IN ${HIDDEN}`,
     args: [placeId],
   });
   if (!lead.rows.length) throw new CrmError('Lead introuvable', 404);
@@ -105,7 +107,7 @@ export type LeadChange = {
 
 export async function updateLead(db: Client, placeId: string, change: LeadChange) {
   const { rows } = await db.execute({
-    sql: `SELECT crm_status, crm_channel, next_action_at FROM leads WHERE place_id = ? AND status <> 'hors_cible'`,
+    sql: `SELECT crm_status, crm_channel, next_action_at FROM leads WHERE place_id = ? AND status NOT IN ${HIDDEN}`,
     args: [placeId],
   });
   if (!rows.length) throw new CrmError('Lead introuvable', 404);
@@ -226,4 +228,30 @@ export async function exportCsv(db: Client): Promise<string> {
     lines.push(CSV_COLUMNS.map(([, key]) => csvCell(row[key])).join(';'));
   }
   return `﻿${lines.join('\r\n')}\r\n`;
+}
+
+// Retire des leads de la prospection (statut pipeline « exclu ») : un nouvel import ne
+// les remet jamais dans la liste. annuler = true les y remet. Renvoie les noms traités.
+export async function excludeLeads(db: Client, placeIds: string[], { reason = 'retiré à la main', annuler = false } = {}): Promise<string[]> {
+  if (!placeIds.length) return [];
+  const marks = placeIds.map(() => '?').join(', ');
+  const { rows } = await db.execute({
+    sql: `SELECT place_id, name FROM leads WHERE place_id IN (${marks}) AND status ${annuler ? "= 'exclu'" : "<> 'exclu'"}`,
+    args: placeIds,
+  });
+  if (!rows.length) return [];
+  const now = new Date().toISOString();
+  const ids = rows.map(r => String(r.place_id));
+  const writes: InStatement[] = ids.flatMap(id => [
+    {
+      sql: `UPDATE leads SET status = ?, status_reason = ?, updated_at = ? WHERE place_id = ?`,
+      args: annuler ? ['nouveau', null, now, id] : ['exclu', reason, now, id],
+    },
+    {
+      sql: `INSERT INTO activities (place_id, at, author, kind, body) VALUES (?, ?, '', 'note', ?)`,
+      args: [id, now, annuler ? 'Remis dans la liste de prospection.' : `Retiré de la liste de prospection : ${reason}.`],
+    },
+  ]);
+  await db.batch(writes, 'write');
+  return rows.map(r => String(r.name));
 }
