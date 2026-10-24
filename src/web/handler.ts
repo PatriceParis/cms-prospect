@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename } from 'node:path';
 import type { Client } from '@libsql/client';
 import { CHANNELS, CRM_STATUSES, CrmError, exportCsv, getLead, listLeads, updateLead } from '../crm.ts';
+import { dbFingerprint } from '../fingerprint.ts';
 import { foldConfigured, handleFoldEvent, signatureHeader, syncMaquettes, verifySignature } from '../fold.ts';
 import { ingestBuffer } from '../ingest.ts';
 import { scoreLeads } from '../score.ts';
@@ -92,16 +92,18 @@ export function createHandler(deps: HandlerDeps) {
           TURSO_AUTH_TOKEN: Boolean(process.env.TURSO_AUTH_TOKEN),
         };
         let database: 'ok' | 'injoignable' = 'injoignable';
+        // Compteurs anonymes : confirment que la production lit la base remplie par la CLI.
+        let counts: Record<string, unknown> | null = null;
         try {
-          await (await deps.getDb()).execute('SELECT 1');
+          const { rows } = await (await deps.getDb()).execute(
+            `SELECT (SELECT count(*) FROM leads WHERE status = 'nouveau') AS leads, (SELECT count(link) FROM maquettes) AS maquettes`,
+          );
+          counts = { ...rows[0] };
           database = 'ok';
         } catch (err) {
           console.error('health: base injoignable', err);
         }
-        // Empreinte de l'adresse de la base : permet de vérifier qu'un poste et la production
-        // visent la même base Turso sans jamais exposer l'adresse elle-même.
-        const url = process.env.TURSO_DATABASE_URL;
-        const databaseFingerprint = url ? createHash('sha256').update(url).digest('hex').slice(0, 8) : null;
+        const databaseFingerprint = dbFingerprint(process.env.TURSO_DATABASE_URL);
         // Préfixe attendu de chaque valeur (fold_ pour la clé, whsec_ pour le secret) :
         // détecte deux valeurs inversées sans rien exposer.
         const keyState = (v: string | undefined, prefix: string) => (!v ? 'absente' : v.trim().startsWith(prefix) ? 'ok' : `valeur inattendue (doit commencer par ${prefix})`);
@@ -109,7 +111,7 @@ export function createHandler(deps: HandlerDeps) {
           FOLD_API_KEY: keyState(process.env.FOLD_API_KEY, 'fold_'),
           FOLD_WEBHOOK_SECRET: keyState(process.env.FOLD_WEBHOOK_SECRET, 'whsec_'),
         };
-        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, database, databaseFingerprint });
+        return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, database, databaseFingerprint, counts });
       }
 
       // Notifications de l'outil de maquettes : publiques, authentifiées par leur signature

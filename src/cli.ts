@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { Client } from '@libsql/client';
 import { LOCAL_DB_URL, openDb } from './db.ts';
+import { dbFingerprint } from './fingerprint.ts';
 import { createClient } from '@libsql/client';
 import { runCascade } from './enrich/cascade.ts';
 import { copyEnrichments } from './enrich/sync.ts';
@@ -178,7 +179,7 @@ const [command, ...args] = process.argv.slice(2);
 const local = args.includes('--local');
 if (local && command === 'sync') throw new Error('sync vise la production : pas de --local.');
 const db = await openDb(local ? LOCAL_DB_URL : undefined);
-console.log(`Base : ${local || !process.env.TURSO_DATABASE_URL ? 'locale (data/prospection.db)' : 'production (Turso)'}`);
+console.log(`Base : ${local || !process.env.TURSO_DATABASE_URL ? 'locale (data/prospection.db)' : `production (Turso, empreinte ${dbFingerprint(process.env.TURSO_DATABASE_URL)})`}`);
 try {
   if (command === 'ingest') await ingest(db, args);
   else if (command === 'score') await score(db);
