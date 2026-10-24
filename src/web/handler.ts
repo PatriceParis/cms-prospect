@@ -102,7 +102,13 @@ export function createHandler(deps: HandlerDeps) {
         // visent la même base Turso sans jamais exposer l'adresse elle-même.
         const url = process.env.TURSO_DATABASE_URL;
         const databaseFingerprint = url ? createHash('sha256').update(url).digest('hex').slice(0, 8) : null;
-        const maquettes = { FOLD_API_KEY: foldConfigured(), FOLD_WEBHOOK_SECRET: Boolean(process.env.FOLD_WEBHOOK_SECRET) };
+        // Préfixe attendu de chaque valeur (fold_ pour la clé, whsec_ pour le secret) :
+        // détecte deux valeurs inversées sans rien exposer.
+        const keyState = (v: string | undefined, prefix: string) => (!v ? 'absente' : v.trim().startsWith(prefix) ? 'ok' : `valeur inattendue (doit commencer par ${prefix})`);
+        const maquettes = {
+          FOLD_API_KEY: keyState(process.env.FOLD_API_KEY, 'fold_'),
+          FOLD_WEBHOOK_SECRET: keyState(process.env.FOLD_WEBHOOK_SECRET, 'whsec_'),
+        };
         return send(res, 200, { ok: Object.values(config).every(Boolean) && database === 'ok', config, maquettes, database, databaseFingerprint });
       }
 
