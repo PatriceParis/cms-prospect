@@ -373,8 +373,10 @@ function rowHtml(l) {
 // Indicateurs sur l'ensemble des leads, quels que soient les filtres de la liste.
 function renderKpis() {
   const all = state.leads;
-  const touched = all.filter(l => l.crm_status !== 'A_CONTACTER');
-  const replied = all.filter(l => ['REP_POSITIVE', 'REP_NEGATIVE', 'NE_PAS_CONTACTER'].includes(l.crm_status));
+  // Contacté = au moins un résultat noté avec un canal ; un changement automatique
+  // (demande reçue depuis la maquette) n'en est pas un.
+  const touched = all.filter(l => l.first_contact_at);
+  const replied = touched.filter(l => ['REP_POSITIVE', 'REP_NEGATIVE', 'NE_PAS_CONTACTER'].includes(l.crm_status));
   const pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : '—');
   const kpi = (value, label, hint) => `<div class="kpi" title="${esc(hint)}"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
   $('#kpis').innerHTML = [
@@ -738,6 +740,7 @@ async function save(payload, done) {
       last_activity_at: activities[0]?.at ?? state.leads[i].last_activity_at,
       last_attempt_at: lastAttempt?.at ?? state.leads[i].last_attempt_at,
       first_attempt_at: state.leads[i].first_attempt_at ?? lastAttempt?.at ?? null,
+      first_contact_at: state.leads[i].first_contact_at ?? activities.findLast(a => a.kind === 'statut' && a.channel)?.at ?? null,
     };
   }
   toast(done);

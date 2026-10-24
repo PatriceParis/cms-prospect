@@ -9,8 +9,8 @@ import { migrate } from './schema.ts';
 import { runStage1, selectEnriched, selectSample, type LeadResult } from './enrich/stage1.ts';
 import { ingestFile } from './ingest.ts';
 import { scoreLeads } from './score.ts';
-import { generateMaquettes, syncMaquettes, type GenerateReport } from './fold.ts';
-import { excludeLeads } from './crm.ts';
+import { generateMaquettes, resetMaquetteStats, syncMaquettes, type GenerateReport } from './fold.ts';
+import { excludeLeads, MAQUETTE_REQUESTS, MAQUETTE_VIEWS } from './crm.ts';
 
 const USAGE = `Usage :
   npm run ingest -- <export Apify .xlsx|.json> [...]
@@ -21,6 +21,7 @@ const USAGE = `Usage :
   npm run sync -- <base source, ex. file:data/prospection.db>
   npm run maquettes -- [--limit N]          crée la maquette des leads qui n'en ont pas
   npm run maquettes -- --sync [--complet]   relit liens, vues et demandes depuis l'outil
+  npm run maquettes -- --remise-a-zero [Place ID ...]   ignore les vues et demandes déjà comptées (tests)
   npm run exclure -- <Place ID> [...] [--raison "texte"] [--annuler]
 Ajouter --local pour viser data/prospection.db même si TURSO_DATABASE_URL est défini.`;
 
@@ -37,7 +38,11 @@ async function exclure(db: Client, args: string[]) {
 
 // Maquettes de site (API Fold) : création des manquantes, ou simple synchronisation.
 async function maquettes(db: Client, args: string[]) {
-  if (args.includes('--sync')) {
+  if (args.includes('--remise-a-zero')) {
+    const done = await resetMaquetteStats(db, args.filter(a => !a.startsWith('--')));
+    for (const r of done) console.log(`  ${r.name} : ${r.views} vue(s) et ${r.requests} demande(s) ignorées${r.restored ? `, statut remis à ${r.restored}` : ''}`);
+    console.log(done.length ? `${done.length} maquettes remises à zéro.` : 'Aucune vue ni demande à remettre à zéro.');
+  } else if (args.includes('--sync')) {
     const r = await syncMaquettes(db, { full: args.includes('--complet') });
     console.log(`Synchronisation : ${r.items} maquettes reçues, ${r.recorded} rattachées à un lead.`);
   } else {
@@ -57,7 +62,7 @@ async function maquettes(db: Client, args: string[]) {
       throw err;
     }
   }
-  const { rows } = await db.execute(`SELECT count(*) AS n, count(m.link) AS links, coalesce(sum(m.views > 0), 0) AS seen, coalesce(sum(m.requests > 0), 0) AS asked
+  const { rows } = await db.execute(`SELECT count(*) AS n, count(m.link) AS links, coalesce(sum(${MAQUETTE_VIEWS} > 0), 0) AS seen, coalesce(sum(${MAQUETTE_REQUESTS} > 0), 0) AS asked
     FROM leads l LEFT JOIN maquettes m ON m.place_id = l.place_id WHERE l.status = 'nouveau'`);
   const t = rows[0];
   console.log(`Leads : ${t.n} · avec lien de maquette ${t.links} · maquettes vues ${t.seen} · demandes ${t.asked}.`);

@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import { createClient, type Client } from '@libsql/client';
+import { listLeads } from '../src/crm.ts';
 import {
-  generateMaquettes, handleFoldEvent, openingHoursOf, recordMaquette, signatureHeader, syncMaquettes, toApifyItem, verifySignature,
+  generateMaquettes, handleFoldEvent, openingHoursOf, recordMaquette, resetMaquetteStats, signatureHeader, syncMaquettes, toApifyItem, verifySignature,
 } from '../src/fold.ts';
 import { migrate } from '../src/schema.ts';
 
@@ -109,6 +110,30 @@ describe('enregistrement des maquettes', () => {
     const row = (await c.execute(`SELECT l.crm_status, m.views FROM leads l JOIN maquettes m USING (place_id) WHERE place_id = 'ChIJ_test_1'`)).rows[0];
     assert.deepEqual({ ...row }, { crm_status: 'A_CONTACTER', views: 1 });
     assert.equal((await c.execute(`SELECT count(*) n FROM activities`)).rows[0].n, 0);
+  });
+
+  it('remise à zéro : ouvertures et demande de test ignorées, statut d’avant rétabli, durable', async () => {
+    const c = await db();
+    await recordMaquette(c, maquette());
+    await recordMaquette(c, maquette({ views: 2, requests: 1, last_view_at: AT, last_request_at: AT }), { now: new Date(AT) });
+    assert.equal((await c.execute(`SELECT crm_status FROM leads WHERE place_id = 'ChIJ_test_1'`)).rows[0].crm_status, 'REP_POSITIVE');
+
+    const done = await resetMaquetteStats(c);
+    assert.deepEqual(done, [{ name: 'Salon', views: 2, requests: 1, restored: 'A_CONTACTER' }]);
+    const lead1 = (await listLeads(c)).find(l => l.place_id === 'ChIJ_test_1')!;
+    assert.deepEqual(
+      [lead1.crm_status, lead1.next_action_at, lead1.maquette_views, lead1.maquette_requests, lead1.maquette_last_view_at],
+      ['A_CONTACTER', null, 0, 0, null],
+    );
+    assert.equal((await c.execute(`SELECT count(*) n FROM activities`)).rows[0].n, 0);
+
+    // Synchronisation complète avec les mêmes compteurs : rien ne revient.
+    await recordMaquette(c, maquette({ views: 2, requests: 1 }));
+    assert.equal((await listLeads(c)).find(l => l.place_id === 'ChIJ_test_1')!.maquette_views, 0);
+    assert.equal((await c.execute(`SELECT count(*) n FROM activities`)).rows[0].n, 0);
+    // Une vraie ouverture ensuite compte de nouveau.
+    await recordMaquette(c, maquette({ views: 3, requests: 1, last_view_at: '2026-10-25T09:00:00Z' }));
+    assert.equal((await listLeads(c)).find(l => l.place_id === 'ChIJ_test_1')!.maquette_views, 1);
   });
 
   it('une opposition reste une opposition', async () => {

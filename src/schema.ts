@@ -152,6 +152,12 @@ const ADDED_COLUMNS: Record<string, [name: string, ddl: string][]> = {
     ['found_with_email', 'INTEGER'],
     ['cost', 'TEXT'],
   ],
+  // Vues et demandes comptées par l'outil mais ignorées par le CRM (ouvertures de test de
+  // l'agence) : le CRM affiche les compteurs de l'outil moins ces valeurs.
+  maquettes: [
+    ['views_ignored', 'INTEGER'],
+    ['requests_ignored', 'INTEGER'],
+  ],
 };
 
 export async function migrate(db: Client): Promise<void> {

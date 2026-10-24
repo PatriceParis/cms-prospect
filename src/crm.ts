@@ -46,14 +46,19 @@ function isIsoDate(v: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
+// Compteurs de l'outil de maquettes, moins ceux remis à zéro (ouvertures de test de l'agence).
+export const MAQUETTE_VIEWS = `max(coalesce(m.views, 0) - coalesce(m.views_ignored, 0), 0)`;
+export const MAQUETTE_REQUESTS = `max(coalesce(m.requests, 0) - coalesce(m.requests_ignored, 0), 0)`;
+
 const LIST_COLUMNS = `
   l.place_id, l.name, l.search_sector, l.google_category, l.rating, l.reviews_count, l.phone, l.phone_kind,
   l.address, l.postal_code, l.city, l.photos_count, l.claimed, l.maps_url, l.score, l.priority,
   l.crm_status, l.crm_channel, l.next_action_at, l.crm_updated_at,
   l.contact_first_name, l.contact_last_name, l.contact_role, l.email, l.email_source, l.email_check, l.instagram, l.linkedin_url,
   l.facebook, l.site_declared, l.site_status,
-  m.link AS maquette_link, m.status AS maquette_status, m.expires_at AS maquette_expires_at, m.views AS maquette_views,
-  m.last_view_at AS maquette_last_view_at, m.requests AS maquette_requests, m.last_request_at AS maquette_last_request_at`;
+  m.link AS maquette_link, m.status AS maquette_status, m.expires_at AS maquette_expires_at,
+  ${MAQUETTE_VIEWS} AS maquette_views, CASE WHEN ${MAQUETTE_VIEWS} > 0 THEN m.last_view_at END AS maquette_last_view_at,
+  ${MAQUETTE_REQUESTS} AS maquette_requests, CASE WHEN ${MAQUETTE_REQUESTS} > 0 THEN m.last_request_at END AS maquette_last_request_at`;
 const FROM_LEADS = `leads l LEFT JOIN maquettes m ON m.place_id = l.place_id`;
 // Jamais affichés : hors cible à l'import, ou exclus à la main (npm run exclure).
 const HIDDEN = `('hors_cible', 'exclu')`;
@@ -66,7 +71,8 @@ export async function listLeads(db: Client) {
     SELECT ${LIST_COLUMNS},
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id) AS last_activity_at,
       (SELECT max(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS last_attempt_at,
-      (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS first_attempt_at
+      (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND ${OUTBOUND}) AS first_attempt_at,
+      (SELECT min(at) FROM activities a WHERE a.place_id = l.place_id AND a.kind = 'statut' AND a.channel IS NOT NULL) AS first_contact_at
     FROM ${FROM_LEADS} WHERE l.status NOT IN ${HIDDEN}
     ORDER BY l.score DESC, l.reviews_count DESC`);
   return rows.map(plain);

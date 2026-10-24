@@ -159,6 +159,7 @@ export function signatureHeader(headers: Record<string, string | string[] | unde
 export type Demande = Record<string, unknown>;
 
 const OPEN_STATUSES = new Set(['A_CONTACTER', 'CONTACTE', 'PAS_DE_REP']);
+const AUTO_STATUS_NOTE = 'Automatique : demande reçue depuis la maquette';
 
 function demandeText(d: Demande | null): string {
   if (!d) return 'Le prospect a demandé ce site depuis sa maquette (« Je veux ce site »).';
@@ -200,8 +201,8 @@ export async function recordMaquette(db: Client, m: Maquette, { demande = null, 
     });
     if (OPEN_STATUSES.has(String(lead.crm_status))) {
       writes.push({
-        sql: `INSERT INTO activities (place_id, at, author, kind, from_status, to_status, body) VALUES (?, ?, '', 'statut', ?, 'REP_POSITIVE', 'Automatique : demande reçue depuis la maquette')`,
-        args: [m.place_id, at, String(lead.crm_status)],
+        sql: `INSERT INTO activities (place_id, at, author, kind, from_status, to_status, body) VALUES (?, ?, '', 'statut', ?, 'REP_POSITIVE', ?)`,
+        args: [m.place_id, at, String(lead.crm_status), AUTO_STATUS_NOTE],
       });
       writes.push({
         sql: `UPDATE leads SET crm_status = 'REP_POSITIVE', next_action_at = ?, crm_updated_at = ? WHERE place_id = ?`,
@@ -211,6 +212,51 @@ export async function recordMaquette(db: Client, m: Maquette, { demande = null, 
   }
   await db.batch(writes, 'write');
   return true;
+}
+
+// Remise à zéro des vues et demandes déjà comptées (ouvertures de test par l'agence) :
+// l'outil garde ses compteurs, le CRM les ignore désormais, même après une synchronisation
+// complète. Les effets automatiques d'une demande sont annulés tant que personne n'a noté
+// de résultat depuis : statut d'avant, relance d'avant, historique automatique retiré.
+export async function resetMaquetteStats(db: Client, placeIds: string[] = [], now = new Date()): Promise<{ name: string; views: number; requests: number; restored: string | null }[]> {
+  const only = placeIds.length ? `AND l.place_id IN (${placeIds.map(() => '?').join(', ')})` : '';
+  const { rows } = await db.execute({
+    sql: `SELECT l.place_id, l.name, l.crm_status, coalesce(m.views, 0) AS views, coalesce(m.requests, 0) AS requests,
+            coalesce(m.views_ignored, 0) AS vi, coalesce(m.requests_ignored, 0) AS ri
+          FROM maquettes m JOIN leads l USING (place_id)
+          WHERE (coalesce(m.views, 0) > coalesce(m.views_ignored, 0) OR coalesce(m.requests, 0) > coalesce(m.requests_ignored, 0)) ${only}`,
+    args: placeIds,
+  });
+  const at = now.toISOString();
+  const out: { name: string; views: number; requests: number; restored: string | null }[] = [];
+  for (const r of rows) {
+    const placeId = String(r.place_id);
+    const writes: InStatement[] = [{
+      sql: `UPDATE maquettes SET views_ignored = views, requests_ignored = requests WHERE place_id = ?`,
+      args: [placeId],
+    }];
+    let restored: string | null = null;
+    const last = (await db.execute({
+      sql: `SELECT id, at, from_status, body FROM activities WHERE place_id = ? AND kind = 'statut' ORDER BY at DESC, id DESC LIMIT 1`,
+      args: [placeId],
+    })).rows[0];
+    if (last && last.body === AUTO_STATUS_NOTE && String(r.crm_status) === 'REP_POSITIVE') {
+      restored = String(last.from_status);
+      const relance = (await db.execute({
+        sql: `SELECT body FROM activities WHERE place_id = ? AND kind = 'relance' AND at < ? ORDER BY at DESC LIMIT 1`,
+        args: [placeId, String(last.at)],
+      })).rows[0];
+      const next = restored === 'A_CONTACTER' ? null : (relance?.body ? String(relance.body) : null);
+      writes.push(
+        { sql: `UPDATE leads SET crm_status = ?, next_action_at = ?, crm_updated_at = ? WHERE place_id = ?`, args: [restored, next, at, placeId] },
+        { sql: `DELETE FROM activities WHERE id = ?`, args: [Number(last.id)] },
+      );
+    }
+    writes.push({ sql: `DELETE FROM activities WHERE place_id = ? AND kind = 'demande'`, args: [placeId] });
+    await db.batch(writes, 'write');
+    out.push({ name: String(r.name), views: Number(r.views) - Number(r.vi), requests: Number(r.requests) - Number(r.ri), restored });
+  }
+  return out;
 }
 
 export async function recordError(db: Client, placeId: string, error: string, now = new Date()) {
