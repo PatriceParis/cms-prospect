@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Percolo · Votre site internet prêt en 5 jours, à partir de votre fiche Google</title>
+  <meta name="description" content="Site vitrine pour artisans et commerces de proximité, rempli à partir de votre fiche Google et prêt en 5 jours. 39 € TTC par mois, sans engagement : vous voyez votre site avant de payer.">
+  <meta property="og:title" content="Percolo · Votre site prêt en 5 jours, à partir de votre fiche Google">
+  <meta property="og:description" content="Un site clair qui fait sonner votre téléphone, votre fiche Google entretenue chaque semaine. Sans engagement, prix TTC affiché.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://percolo.fr/">
+  <link rel="canonical" href="https://percolo.fr/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23234b3f'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23f4b740' stroke-width='3.5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cream: #faf6ef;
+      --paper: #ffffff;
+      --sand: #f1e9dc;
+      --ink: #1c1b18;
+      --ink-2: #4a463f;
+      --muted: #7a7469;
+      --line: #e6dccb;
+      --green: #234b3f;
+      --green-2: #2f6354;
+      --green-soft: #e3eee9;
+      --amber: #f4b740;
+      --amber-soft: #fdf1d6;
+      --radius: 18px;
+      --shadow: 0 1px 2px rgb(28 27 24 / 0.05), 0 12px 32px rgb(28 27 24 / 0.08);
+      --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+      --text: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--cream); color: var(--ink); font: 17px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    img, svg { display: block; }
+    .wrap { width: min(1120px, 100% - 40px); margin-inline: auto; }
+    h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.08; margin: 0; }
+    h2 { font-size: clamp(30px, 4vw, 44px); }
+    h3 { font-size: 21px; letter-spacing: -0.01em; }
+    p { margin: 0; }
+    .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-2); }
+    .lead { font-size: clamp(18px, 2vw, 20px); color: var(--ink-2); }
+    section { padding: 96px 0; }
+    .center { text-align: center; }
+    .section-head { max-width: 680px; margin: 0 auto 48px; display: grid; gap: 14px; }
+
+    /* Boutons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 52px; padding: 0 26px; border-radius: 999px; border: 0;
+      font: 600 16px/1 var(--text); text-decoration: none; cursor: pointer; transition: transform .15s, background .15s, box-shadow .15s;
+    }
+    .btn-primary { background: var(--green); color: #fff; box-shadow: 0 8px 20px rgb(35 75 63 / 0.25); }
+    .btn-primary:hover { background: var(--green-2); transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+    .btn-ghost:hover { border-color: var(--ink); }
+    .btn:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+
+    /* En-tête */
+    header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--cream) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid transparent; }
+    header.top.scrolled { border-bottom-color: var(--line); }
+    .top-in { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 72px; }
+    .logo { display: inline-flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); letter-spacing: -0.03em; text-decoration: none; color: var(--green); }
+    .logo i { width: 26px; height: 26px; border-radius: 50%; border: 5px solid var(--amber); display: inline-block; }
+    nav.links { display: flex; gap: 28px; font-size: 15px; font-weight: 500; }
+    nav.links a { text-decoration: none; color: var(--ink-2); }
+    nav.links a:hover { color: var(--ink); }
+    .top .btn { min-height: 44px; padding: 0 20px; font-size: 15px; }
+
+    /* Hero */
+    .hero { padding: 56px 0 88px; }
+    .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
+    .hero h1 { font-size: clamp(40px, 6vw, 68px); }
+    .hero h1 em { font-style: normal; color: var(--green); background: linear-gradient(transparent 62%, var(--amber-soft) 62%); padding: 0 4px; }
+    .hero .lead { margin-top: 22px; max-width: 560px; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .reassure { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 24px; font-size: 14px; color: var(--muted); }
+    .reassure span::before { content: "✓"; color: var(--green-2); font-weight: 700; margin-right: 6px; }
+
+    /* Visuel : un exemple de site sur téléphone, devant le tableau de suivi */
+    .hero-visual { position: relative; min-height: 520px; }
+    .board {
+      position: absolute; right: 0; top: 40px; width: 62%; background: var(--paper); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 22px 22px 18px; border: 1px solid var(--line);
+    }
+    .board-title { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+    .board-title b { color: var(--ink); font-size: 15px; }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .kpi { background: var(--cream); border-radius: 12px; padding: 12px; }
+    .kpi small { display: block; font-size: 11.5px; color: var(--muted); }
+    .kpi i { display: block; height: 10px; margin-top: 8px; border-radius: 6px; background: var(--sand); }
+    .kpi i.up { width: 70%; background: var(--green-soft); }
+    .bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; margin-top: 16px; padding-left: 2px; }
+    .bars span { flex: 1; border-radius: 6px 6px 2px 2px; background: var(--green-soft); }
+    .bars span.on { background: var(--green-2); }
+    .board-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .phone {
+      position: absolute; left: 0; bottom: 0; width: 205px; aspect-ratio: 9 / 18.5; border-radius: 34px; padding: 10px;
+      background: #171614; box-shadow: 0 30px 60px rgb(28 27 24 / 0.28);
+    }
+    .screen { height: 100%; border-radius: 26px; overflow: hidden; background: #fbf8f2; display: flex; flex-direction: column; font-size: 11px; }
+    .s-bar { height: 22px; background: #2a2a28; color: #f3e3b8; font-size: 9px; display: grid; place-items: center; letter-spacing: .04em; }
+    .s-head { padding: 12px 14px 0; font: 700 12px/1 var(--display); }
+    .s-hero { margin: 12px; padding: 14px; border-radius: 16px; background: linear-gradient(160deg, #f1ead9, #e7dcc4); }
+    .s-hero small { font-size: 8px; letter-spacing: .1em; color: #8b6b2e; font-weight: 700; }
+    .s-hero h4 { margin: 6px 0; font: 800 21px/1 var(--display); color: #2f3a2d; letter-spacing: -0.03em; }
+    .s-hero p { font-size: 9.5px; color: #5c5547; }
+    .s-stars { margin-top: 8px; font-size: 9px; color: #b78a1f; }
+    .s-photo { flex: 1; margin: 0 12px; border-radius: 14px 14px 0 0; background:
+      radial-gradient(circle at 30% 40%, #8fae7c 0 18%, transparent 19%),
+      radial-gradient(circle at 70% 55%, #c79a5b 0 22%, transparent 23%),
+      linear-gradient(150deg, #5f7f58, #2f4a39); }
+    .s-call { margin: -26px 12px 14px; position: relative; height: 34px; border-radius: 999px; background: #2f5d3f; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 11px; }
+    .tag-example { position: absolute; left: 18px; top: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; color: var(--ink-2); box-shadow: var(--shadow); }
+
+    /* Constat */
+    .problem { background: var(--paper); border-block: 1px solid var(--line); }
+    .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; }
+    .problem h2 { max-width: 520px; }
+    .problem .lead { margin-top: 18px; }
+    .options { display: grid; gap: 14px; }
+    .option { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--cream); }
+    .option .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--sand); font-size: 18px; }
+    .option b { display: block; font-size: 16px; }
+    .option p { font-size: 15px; color: var(--ink-2); }
+    .option.us { background: var(--green); border-color: var(--green); color: #fff; }
+    .option.us .ico { background: rgb(255 255 255 / 0.14); }
+    .option.us p { color: #d9e7e1; }
+
+    /* Étapes */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: s; }
+    .step { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; display: grid; gap: 10px; align-content: start; }
+    .step::before { counter-increment: s; content: counter(s); width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--amber); font: 800 18px/1 var(--display); color: var(--ink); margin-bottom: 6px; }
+    .step p { color: var(--ink-2); font-size: 16px; }
+    .step .when { font-size: 13px; font-weight: 600; color: var(--green-2); }
+
+    /* Bénéfices */
+    .benefits { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .benefit { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px; display: grid; gap: 10px; align-content: start; }
+    .benefit .ico { width: 44px; height: 44px; border-radius: 12px; background: var(--green-soft); color: var(--green); display: grid; place-items: center; }
+    .benefit p { color: var(--ink-2); font-size: 16px; }
+    .extras { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 28px; }
+    .extras span { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-size: 14.5px; color: var(--ink-2); }
+
+    /* Tarifs */
+    .pricing { background: var(--green); color: #fff; }
+    .pricing .eyebrow { color: var(--amber); }
+    .pricing .lead { color: #d9e7e1; }
+    .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+    .plan { background: #fff; color: var(--ink); border-radius: var(--radius); padding: 30px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+    .plan.best { outline: 3px solid var(--amber); }
+    .plan .badge { position: absolute; top: -13px; left: 30px; background: var(--amber); color: var(--ink); font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 999px; }
+    .plan .for { font-size: 14.5px; color: var(--muted); min-height: 44px; }
+    .price { font: 800 46px/1 var(--display); letter-spacing: -0.03em; }
+    .price small { font: 500 15px/1 var(--text); color: var(--muted); letter-spacing: 0; }
+    .yearly { font-size: 13.5px; color: var(--green-2); font-weight: 500; }
+    .plan ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; font-size: 15.5px; }
+    .plan li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
+    .plan li::before { content: "✓"; color: var(--green-2); font-weight: 700; }
+    .plan .btn { margin-top: auto; }
+    .plan:not(.best) .btn { background: var(--cream); color: var(--ink); box-shadow: none; border: 1.5px solid var(--line); }
+    .plan:not(.best) .btn:hover { border-color: var(--ink); }
+    .fine { text-align: center; margin-top: 28px; font-size: 14.5px; color: #d9e7e1; }
+
+    /* Franchise */
+    .honest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px; }
+    .card h3 { margin-bottom: 14px; }
+    .card ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); }
+
+    /* FAQ */
+    .faq { max-width: 780px; margin: 0 auto; display: grid; gap: 12px; }
+    details { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 4px 22px; }
+    summary { cursor: pointer; list-style: none; padding: 16px 0; font-weight: 600; font-size: 17px; display: flex; justify-content: space-between; gap: 16px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font: 700 22px/1 var(--display); color: var(--green-2); transition: transform .2s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    details p { padding: 0 0 18px; color: var(--ink-2); }
+
+    /* Formulaire final */
+    .closing { padding-bottom: 110px; }
+    .closing-card { background: var(--paper); border: 1px solid var(--line); border-radius: 28px; box-shadow: var(--shadow); display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+    .closing-copy { padding: 48px; background: var(--amber-soft); display: grid; gap: 18px; align-content: center; }
+    .closing-copy ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--ink-2); }
+    .closing-copy li::before { content: "✓"; color: var(--green-2); font-weight: 700; margin-right: 10px; }
+    form { padding: 48px; display: grid; gap: 16px; }
+    label { display: grid; gap: 6px; font-size: 14.5px; font-weight: 600; }
+    label small { font-weight: 400; color: var(--muted); }
+    input { font: inherit; font-size: 16px; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--cream); color: var(--ink); width: 100%; }
+    input { font-weight: 400; }
+    input::placeholder { color: #aaa192; }
+    input:focus { border-color: var(--green-2); background: #fff; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .consent { font-size: 13px; color: var(--muted); }
+    .form-msg { font-size: 15px; padding: 12px 14px; border-radius: 12px; display: none; }
+    .form-msg.ok { display: block; background: var(--green-soft); color: var(--green); }
+    .form-msg.err { display: block; background: #fdecea; color: #8a2a1e; }
+
+    footer { border-top: 1px solid var(--line); padding: 30px 0 40px; font-size: 14px; color: var(--muted); }
+    .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+    .foot nav { display: flex; gap: 18px; }
+
+    /* Barre d'appel à l'action sur mobile */
+    .sticky-cta { display: none; }
+
+    @media (max-width: 960px) {
+      .hero-grid, .problem-grid, .closing-card, .honest-grid { grid-template-columns: 1fr; }
+      .hero-visual { min-height: 470px; max-width: 520px; width: 100%; margin: 0 auto; }
+      .steps, .plans { grid-template-columns: 1fr; }
+      .benefits { grid-template-columns: 1fr; }
+      .plan .for { min-height: 0; }
+      nav.links { display: none; }
+    }
+    @media (max-width: 600px) {
+      body { font-size: 16px; }
+      section { padding: 68px 0; }
+      .hero { padding: 28px 0 64px; }
+      .top .btn { display: none; }
+      .hero-visual { min-height: 420px; }
+      .phone { width: 205px; }
+      .board { width: 62%; top: 30px; }
+      .tag-example { top: -6px; left: auto; right: 8px; }
+      .kpis { grid-template-columns: repeat(3, 1fr); }
+      .closing-copy, form { padding: 28px 22px; }
+      .two { grid-template-columns: 1fr; }
+      .sticky-cta { display: block; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 20; transition: transform .25s; }
+      .sticky-cta.hide { transform: translateY(140%); }
+      .sticky-cta .btn { width: 100%; }
+      footer { padding-bottom: 96px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn, .sticky-cta { transition: none; } }
+  </style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="wrap top-in">
+    <a class="logo" href="#top" aria-label="Percolo, accueil"><i aria-hidden="true"></i>percolo</a>
+    <nav class="links" aria-label="Sections">
+      <a href="#comment">Comment ça marche</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#questions">Questions</a>
+    </nav>
+    <a class="btn btn-primary" href="#apercu">Voir mon site gratuitement</a>
+  </div>
+</header>
+
+<main>
+  <!-- Hero : la promesse du canvas, dans les mots du client -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Artisans et commerces de proximité</p>
+        <h1>Votre site prêt en 5 jours, <em>rempli à partir de votre fiche Google</em></h1>
+        <p class="lead">Un site clair qui donne envie d’appeler, et votre fiche Google entretenue chaque semaine. 39 € TTC par mois, sans engagement. Et vous voyez votre site avant de payer.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#apercu">Voir mon site gratuitement</a>
+          <a class="btn btn-ghost" href="#tarifs">Voir les tarifs</a>
+        </div>
+        <div class="reassure">
+          <span>Sans engagement</span>
+          <span>Sans frais de mise en ligne</span>
+          <span>Prix TTC affichés</span>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="Illustration : un exemple de site Percolo sur téléphone et le tableau de suivi">
+        <div class="board" aria-hidden="true">
+          <div class="board-title"><b>Votre tableau de suivi</b><span>30 derniers jours</span></div>
+          <div class="kpis">
+            <div class="kpi"><small>Visiteurs</small><i class="up"></i></div>
+            <div class="kpi"><small>Appels</small><i class="up" style="width:45%"></i></div>
+            <div class="kpi"><small>Demandes</small><i class="up" style="width:30%"></i></div>
+          </div>
+          <div class="bars"><span style="height:28%"></span><span style="height:40%"></span><span style="height:34%"></span><span style="height:52%"></span><span style="height:46%"></span><span class="on" style="height:64%"></span><span style="height:58%"></span><span style="height:72%"></span><span style="height:60%"></span><span class="on" style="height:84%"></span><span style="height:70%"></span><span style="height:78%"></span></div>
+          <p class="board-note">Illustration. Mesure sans cookies, hébergée en Europe.</p>
+        </div>
+        <div class="phone" aria-hidden="true">
+          <div class="screen">
+            <div class="s-bar">ÉTÉ · OUVERT TOUT LE MOIS D’AOÛT</div>
+            <div class="s-head">Jardinerie des Saisons</div>
+            <div class="s-hero">
+              <small>FLEURISTE · TOURS</small>
+              <h4>Plantes, conseils et passion</h4>
+              <p>Vivaces, arbustes, potager : on vous aide à choisir.</p>
+              <div class="s-stars">★★★★★ avis Google</div>
+            </div>
+            <div class="s-photo"></div>
+            <div class="s-call">📞 Appeler</div>
+          </div>
+        </div>
+        <span class="tag-example">Exemple de site</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Constat -> solution -->
+  <section class="problem">
+    <div class="wrap problem-grid">
+      <div>
+        <p class="eyebrow">Le constat</p>
+        <h2>Vos clients vous cherchent sur Google. Sans site, ils tombent sur ceux qui en ont un.</h2>
+        <p class="lead">Quand quelqu’un tape « plombier » ou « coiffeur » suivi de sa ville, il veut vos prestations, vos photos, vos horaires et un numéro à toucher. Votre fiche Google en dit un peu. Un site dit tout, et donne confiance.</p>
+      </div>
+      <div class="options">
+        <div class="option"><span class="ico" aria-hidden="true">⏳</span><div><b>Le faire soi-même</b><p>Des soirées à choisir un modèle et écrire des textes, pour un site souvent laissé à moitié.</p></div></div>
+        <div class="option"><span class="ico" aria-hidden="true">🧾</span><div><b>Passer par une agence</b><p>Un devis, des allers-retours, et une facture qui pèse lourd pour une petite entreprise.</p></div></div>
+        <div class="option"><span class="ico" aria-hidden="true">🔒</span><div><b>Signer un contrat de plusieurs années</b><p>Un abonnement dont on ne sort pas, et un site qui ne vous appartient pas vraiment.</p></div></div>
+        <div class="option us"><span class="ico" aria-hidden="true">✨</span><div><b>Avec Percolo</b><p>Votre site est déjà écrit à partir de votre fiche Google. Vous le regardez, vous l’ajustez, il est en ligne en 5 jours. Vous arrêtez quand vous voulez.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comment ça marche -->
+  <section id="comment">
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Comment ça marche</p>
+        <h2>Vous n’avez presque rien à faire</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <span class="when">Gratuit, sans engagement</span>
+          <h3>On prépare votre site</h3>
+          <p>À partir de votre fiche Google : nom, prestations, photos, avis, horaires. Vous recevez un aperçu de votre futur site, à votre nom.</p>
+        </div>
+        <div class="step">
+          <span class="when">Quelques minutes</span>
+          <h3>Vous l’ajustez</h3>
+          <p>Textes, photos, prestations, couleurs : vous modifiez tout dans un éditeur simple, avec l’aperçu qui se met à jour en direct. Ou on le fait ensemble au téléphone.</p>
+        </div>
+        <div class="step">
+          <span class="when">En ligne en 5 jours</span>
+          <h3>Il travaille pour vous</h3>
+          <p>Votre site est publié. Chaque semaine, des optimisations pour votre fiche Google, prêtes à publier. Chaque mois, vous voyez ce que ça vous apporte.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bénéfices -->
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Ce que vous y gagnez</p>
+        <h2>Un site pensé pour faire sonner votre téléphone</h2>
+      </div>
+      <div class="benefits">
+        <div class="benefit">
+          <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></span>
+          <h3>Conçu pour l’appel et le devis</h3>
+          <p>Un bouton « Appeler » toujours à portée de pouce, un formulaire de contact court, vos avis Google bien en vue. Sur mobile d’abord, là où vos clients vous cherchent.</p>
+        </div>
+        <div class="benefit">
+          <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+          <h3>Vous gardez la main</h3>
+          <p>Changer vos horaires d’été, ajouter une prestation, remplacer une photo : c’est vous qui décidez, quand vous voulez, sans attendre personne.</p>
+        </div>
+        <div class="benefit">
+          <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
+          <h3>Vous voyez ce que ça rapporte</h3>
+          <p>Visiteurs, d’où ils viennent, clics sur votre numéro, demandes de contact : un tableau de suivi simple, mesuré sans cookies.</p>
+        </div>
+        <div class="benefit">
+          <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+          <h3>Votre fiche Google entretenue</h3>
+          <p>Chaque semaine, des posts, des réponses aux avis et des photos à publier, déjà préparés pour vous. Une fiche vivante inspire confiance et se remarque davantage.</p>
+        </div>
+      </div>
+      <div class="extras" aria-label="Aussi inclus">
+        <span>12 thèmes au choix</span>
+        <span>Habillage de saison automatique</span>
+        <span>Référencement préparé pour vous</span>
+        <span>Hébergement inclus</span>
+        <span>Site exportable si vous partez</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tarifs -->
+  <section class="pricing" id="tarifs">
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Tarifs</p>
+        <h2>Un prix simple, affiché TTC</h2>
+        <p class="lead">Par établissement, sans engagement, sans frais de mise en ligne. Vous voyez votre site avant de payer.</p>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <h3>Présence</h3>
+          <p class="for">Pour avoir enfin un site clair, à votre nom.</p>
+          <p class="price">29 € <small>TTC / mois</small></p>
+          <p class="yearly">ou 290 € par an, 2 mois offerts</p>
+          <ul>
+            <li>Site de 1 à 5 pages, rempli à partir de votre fiche Google</li>
+            <li>Éditeur simple, modifications illimitées</li>
+            <li>Hébergement inclus</li>
+            <li>Tableau de suivi de base</li>
+          </ul>
+          <a class="btn" href="#apercu">Voir mon site gratuitement</a>
+        </div>
+        <div class="plan best">
+          <span class="badge">Recommandé</span>
+          <h3>Visibilité</h3>
+          <p class="for">Pour un site qui travaille, et une fiche Google qui vit.</p>
+          <p class="price">39 € <small>TTC / mois</small></p>
+          <p class="yearly">ou 390 € par an, 2 mois offerts</p>
+          <ul>
+            <li>Tout Présence</li>
+            <li>Optimisations de votre fiche Google chaque semaine</li>
+            <li>Tableau de suivi complet</li>
+          </ul>
+          <a class="btn btn-primary" href="#apercu">Voir mon site gratuitement</a>
+        </div>
+        <div class="plan">
+          <h3>Fiche Google</h3>
+          <p class="for">Vous avez déjà un site ? On s’occupe seulement de votre fiche.</p>
+          <p class="price">29 € <small>TTC / mois</small></p>
+          <p class="yearly">sans site</p>
+          <ul>
+            <li>Optimisations de votre fiche Google chaque semaine</li>
+            <li>Posts, réponses aux avis et photos préparés pour vous</li>
+          </ul>
+          <a class="btn" href="#apercu">Nous parler de votre fiche</a>
+        </div>
+      </div>
+      <p class="fine">Sans engagement : vous arrêtez quand vous voulez, et votre site reste exportable.</p>
+    </div>
+  </section>
+
+  <!-- Franchise : ce qu'on fait, ce qu'on ne fait pas (renonciations du canvas) -->
+  <section>
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Pour être clairs</p>
+        <h2>Ce que Percolo fait, et ce qu’il ne fait pas</h2>
+      </div>
+      <div class="honest-grid">
+        <div class="card">
+          <h3>Ce que vous avez</h3>
+          <ul>
+            <li>Un site vitrine soigné, pensé pour votre métier</li>
+            <li>Vos textes, vos photos, vos avis, vos horaires</li>
+            <li>Un bouton d’appel et un formulaire de contact</li>
+            <li>Un lien vers votre outil de réservation si vous en avez un (Planity, Doctolib…)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Ce qu’on ne promet pas</h3>
+          <ul>
+            <li>Un design entièrement sur mesure</li>
+            <li>Une boutique en ligne</li>
+            <li>Un système de réservation intégré</li>
+            <li>Plusieurs établissements sur un même abonnement</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="questions" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Questions</p>
+        <h2>Vos questions, nos réponses</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>C’est vraiment sans engagement ?</summary>
+          <p>Oui. Vous payez au mois et vous arrêtez quand vous voulez, sans frais. Si vous partez, votre site reste exportable.</p>
+        </details>
+        <details>
+          <summary>Je n’ai pas le temps d’écrire des textes.</summary>
+          <p>Vous n’en avez pas besoin : votre site est déjà rempli à partir de votre fiche Google. Vous relisez, vous corrigez ce qui ne vous ressemble pas, c’est tout.</p>
+        </details>
+        <details>
+          <summary>Je peux voir mon site avant de payer ?</summary>
+          <p>Oui, c’est même le principe. On vous envoie un aperçu de votre site, gratuitement. Vous ne payez que si vous décidez de le mettre en ligne.</p>
+        </details>
+        <details>
+          <summary>Combien de temps avant d’être en ligne ?</summary>
+          <p>5 jours. Le temps de valider l’aperçu ensemble et d’ajuster ce que vous souhaitez.</p>
+        </details>
+        <details>
+          <summary>J’ai déjà Instagram ou Planity, ça sert à quoi ?</summary>
+          <p>Instagram et Planity servent surtout à vos clients actuels. Le site, c’est ce que Google montre à ceux qui ne vous connaissent pas encore. On met vos liens Instagram et de réservation en avant sur votre site.</p>
+        </details>
+        <details>
+          <summary>Que faites-vous de ma fiche Google ?</summary>
+          <p>Avec l’offre Visibilité, on vous prépare chaque semaine des posts, des réponses à vos avis et des photos. Vous gardez la main : rien n’est publié sans vous.</p>
+        </details>
+        <details>
+          <summary>Et si je veux changer mes horaires ou une photo ?</summary>
+          <p>Vous le faites vous-même dans l’éditeur, en quelques minutes, et c’est en ligne dès que vous cliquez sur « Publier ». Une question ? On vous répond depuis votre espace client.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Formulaire : un seul appel à l'action, la demande d'aperçu -->
+  <section class="closing" id="apercu">
+    <div class="wrap">
+      <div class="closing-card">
+        <div class="closing-copy">
+          <p class="eyebrow">Gratuit, sans engagement</p>
+          <h2>Voyez votre site avant de décider</h2>
+          <p class="lead">Dites-nous qui vous êtes : on prépare l’aperçu de votre site à partir de votre fiche Google et on vous l’envoie.</p>
+          <ul>
+            <li>Aucune carte bancaire demandée</li>
+            <li>Un aperçu à votre nom, pas un modèle générique</li>
+            <li>Vous décidez ensuite, sans pression</li>
+          </ul>
+        </div>
+        <form id="lead-form" data-endpoint="/api/demande" novalidate>
+          <label>Nom de votre entreprise
+            <input name="business" required autocomplete="organization" placeholder="Ex. : Jardinerie des Saisons">
+          </label>
+          <label>Ville
+            <input name="city" required autocomplete="address-level2" placeholder="Ex. : Tours">
+          </label>
+          <div class="two">
+            <label>Téléphone
+              <input name="phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78">
+            </label>
+            <label><span>E-mail <small>(facultatif)</small></span>
+              <input name="email" type="email" autocomplete="email" placeholder="vous@exemple.fr">
+            </label>
+          </div>
+          <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+          <button class="btn btn-primary" type="submit">Recevoir l’aperçu de mon site</button>
+          <p class="form-msg" id="form-msg" role="status"></p>
+          <p class="consent">Vos coordonnées servent uniquement à vous envoyer votre aperçu et à vous recontacter à son sujet. Vous pouvez demander leur suppression à tout moment.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© Percolo · percolo.fr</span>
+    <nav aria-label="Informations légales">
+      <a href="/mentions-legales">Mentions légales</a>
+      <a href="/confidentialite">Confidentialité</a>
+    </nav>
+  </div>
+</footer>
+
+<div class="sticky-cta hide" id="sticky-cta"><a class="btn btn-primary" href="#apercu">Voir mon site gratuitement</a></div>
+
+<script>
+  // En-tête : bordure au défilement.
+  const header = document.getElementById('top');
+  addEventListener('scroll', () => header.classList.toggle('scrolled', scrollY > 8), { passive: true });
+
+  // Barre d'action mobile : seulement quand ni le bouton du haut ni le formulaire ne sont à l'écran.
+  const sticky = document.getElementById('sticky-cta');
+  const seen = new Map();
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) seen.set(e.target, e.isIntersecting);
+    sticky.classList.toggle('hide', [...seen.values()].some(Boolean));
+  }, { threshold: 0.1 });
+  io.observe(document.querySelector('.hero .cta-row'));
+  io.observe(document.getElementById('apercu'));
+
+  // Demande d'aperçu : envoi en JSON vers data-endpoint.
+  const form = document.getElementById('lead-form');
+  const msg = document.getElementById('form-msg');
+  const show = (text, ok) => { msg.textContent = text; msg.className = `form-msg ${ok ? 'ok' : 'err'}`; };
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    if (data.website) return; // pot de miel : rempli par un robot
+    if (!data.business.trim() || !data.city.trim()) return show('Indiquez le nom de votre entreprise et votre ville.', false);
+    if (!data.phone.trim() && !data.email.trim()) return show('Laissez un téléphone ou un e-mail pour recevoir votre aperçu.', false);
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    try {
+      const res = await fetch(form.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error();
+      form.reset();
+      show('Merci ! On prépare votre aperçu et on vous l’envoie très vite.', true);
+    } catch {
+      show('L’envoi n’a pas abouti. Réessayez dans un instant.', false);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
